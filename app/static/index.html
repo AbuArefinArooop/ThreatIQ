@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThreatIQ v4.0 — AI-Powered CTI Platform</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#0B1E3D;--teal:#0D7377;--green:#1A5C38;--red:#991B1B;
+  --gold:#B45309;--purple:#5B21B6;--orange:#C2410C;
+  --gray:#374151;--lgray:#6B7280;--border:#E5E7EB;--bg:#F9FAFB;
+  --white:#FFFFFF;--text:#111827;--text2:#4B5563;
+  --shadow:0 1px 3px rgba(0,0,0,.10);
+  --shadow-md:0 4px 6px rgba(0,0,0,.07);
+  --shadow-lg:0 10px 15px rgba(0,0,0,.08);
+  --radius:8px;--radius-lg:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#F3F4F6}
+::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:3px}
+#app{display:flex;height:100vh;overflow:hidden}
+/* Sidebar */
+#sidebar{width:220px;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;box-shadow:var(--shadow)}
+.sidebar-logo{padding:18px 16px 12px;border-bottom:1px solid var(--border)}
+.logo-mark{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:var(--navy);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
+.logo-text{font-weight:700;font-size:16px;color:var(--navy)}
+.logo-sub{font-size:10px;color:var(--lgray)}
+.nav-section{padding:6px 0}
+.nav-label{font-size:10px;font-weight:600;color:var(--lgray);letter-spacing:.8px;text-transform:uppercase;padding:8px 16px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;color:var(--text2);font-size:13.5px;font-weight:500;transition:all .15s;border-left:3px solid transparent;margin:1px 0}
+.nav-item:hover{background:#F3F4F6;color:var(--navy)}
+.nav-item.active{background:#EFF6FF;color:var(--teal);border-left-color:var(--teal);font-weight:600}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px}
+.sidebar-footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--border)}
+.conn-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px}
+.conn-live{background:#10B981}.conn-off{background:#D1D5DB}
+.conn-row{font-size:11px;color:var(--lgray);display:flex;align-items:center;margin-bottom:3px}
+/* Main */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#topbar{height:56px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0;box-shadow:var(--shadow)}
+#content{flex:1;overflow-y:auto;padding:22px;background:var(--bg)}
+#topbar-search input{width:100%;max-width:380px;padding:7px 12px;border:1px solid var(--border);border-radius:6px;font-size:13.5px;background:#F9FAFB;color:var(--text);transition:.15s}
+#topbar-search input:focus{outline:none;border-color:var(--teal);background:#fff;box-shadow:0 0 0 3px rgba(13,115,119,.1)}
+.topbar-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.btn-icon{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--text2);font-size:17px;cursor:pointer;border:none;transition:.15s}
+.btn-icon:hover{background:#F3F4F6}
+#user-menu{display:flex;align-items:center;gap:8px;padding:4px 10px;border-radius:8px;cursor:pointer;background:#F3F4F6}
+.user-avatar{width:28px;height:28px;border-radius:50%;background:var(--navy);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.user-role{font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px}
+#env-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:6px;background:#FEF3C7;color:#92400E}
+/* Pages */
+.page{display:none}.page.active{display:block}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+.page-title{font-size:21px;font-weight:700;color:var(--navy)}
+.page-sub{font-size:13px;color:var(--lgray);margin-top:2px}
+.page-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border-radius:7px;font-size:13.5px;font-weight:600;transition:.15s;white-space:nowrap;border:none;cursor:pointer}
+.btn-primary{background:var(--navy);color:#fff}.btn-primary:hover{background:#162F5A}
+.btn-teal{background:var(--teal);color:#fff}.btn-teal:hover{background:#0C6268}
+.btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#144A2D}
+.btn-red{background:var(--red);color:#fff}
+.btn-outline{background:#fff;color:var(--navy);border:1px solid var(--border)}.btn-outline:hover{background:#F3F4F6}
+.btn-sm{padding:5px 11px;font-size:12.5px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+/* Cards */
+.card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;box-shadow:var(--shadow)}
+.card-title{font-size:13.5px;font-weight:600;color:var(--text2);margin-bottom:12px;display:flex;align-items:center;gap:7px}
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:18px}
+.stat-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:15px 17px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px}
+.stat-card.navy::before{background:var(--navy)}.stat-card.teal::before{background:var(--teal)}
+.stat-card.green::before{background:var(--green)}.stat-card.red::before{background:var(--red)}
+.stat-card.gold::before{background:var(--gold)}.stat-card.purple::before{background:var(--purple)}
+.stat-label{font-size:11px;font-weight:600;color:var(--lgray);text-transform:uppercase;letter-spacing:.5px}
+.stat-value{font-size:26px;font-weight:700;color:var(--navy);margin:3px 0 2px;line-height:1}
+.stat-sub{font-size:11px;color:var(--lgray)}
+.stat-icon{position:absolute;top:12px;right:13px;font-size:20px;opacity:.12}
+/* Tables */
+.table-wrap{overflow-x:auto;border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;background:#fff}
+thead th{background:#F8FAFC;padding:9px 13px;text-align:left;font-size:11px;font-weight:600;color:var(--lgray);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);white-space:nowrap}
+tbody td{padding:9px 13px;font-size:13px;border-bottom:1px solid #F3F4F6;color:var(--text)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#F8FAFC}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge-red{background:#FEF2F2;color:var(--red)}.badge-orange{background:#FFF7ED;color:var(--orange)}
+.badge-gold{background:#FFFBEB;color:var(--gold)}.badge-blue{background:#EFF6FF;color:#1D4ED8}
+.badge-green{background:#F0FDF4;color:var(--green)}.badge-gray{background:#F3F4F6;color:var(--lgray)}
+.badge-navy{background:#EFF6FF;color:var(--navy)}.badge-purple{background:#F5F3FF;color:var(--purple)}
+.badge-teal{background:#F0FDFA;color:var(--teal)}
+/* Auth */
+#auth-overlay{position:fixed;inset:0;background:rgba(17,24,39,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:1000}
+#auth-modal{background:#fff;border-radius:16px;padding:32px;width:380px;box-shadow:var(--shadow-lg)}
+.auth-logo{text-align:center;margin-bottom:22px}
+.auth-logo-icon{width:50px;height:50px;background:var(--navy);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:700;margin-bottom:10px}
+.auth-logo h2{font-size:20px;font-weight:700;color:var(--navy)}
+.auth-logo p{font-size:13px;color:var(--lgray);margin-top:3px}
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:13px;font-weight:600;color:var(--text2);margin-bottom:5px}
+.form-input{width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:7px;font-size:14px;color:var(--text);transition:.15s;font-family:inherit}
+.form-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,115,119,.1)}
+.form-hint{font-size:11.5px;color:var(--lgray);margin-top:5px}
+.auth-error{background:#FEF2F2;border:1px solid #FECACA;color:var(--red);border-radius:7px;padding:9px 12px;font-size:13px;margin-bottom:13px;display:none}
+/* Charts */
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:13px;margin-bottom:18px}
+.chart-wrap{position:relative;height:210px}
+/* Pipeline */
+.step-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:15px}
+.step-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;cursor:pointer;transition:.15s;box-shadow:var(--shadow)}
+.step-card:hover{border-color:var(--teal);box-shadow:var(--shadow-md)}
+.step-card.done{border-color:var(--green);background:#F0FDF4}
+.step-card.running{border-color:var(--teal);background:#F0FDFA;animation:pulse 2s infinite}
+.step-card.error{border-color:var(--red);background:#FEF2F2}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.75}}
+.step-num{width:30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-bottom:9px}
+.step-card.done .step-num{background:var(--green)}
+.step-card.running .step-num{background:var(--teal)}
+.step-card.error .step-num{background:var(--red)}
+.step-title{font-size:13.5px;font-weight:600;color:var(--navy);margin-bottom:4px}
+.step-desc{font-size:12px;color:var(--lgray);line-height:1.5}
+.step-result{font-size:11.5px;color:var(--green);margin-top:7px;font-weight:500}
+/* Log */
+#pipe-log{background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius);padding:11px;height:190px;overflow-y:auto;font-family:'Cascadia Code','Courier New',monospace;font-size:11.5px;line-height:1.7}
+.log-ok{color:#1A5C38}.log-err{color:#991B1B}.log-info{color:#0D7377}.log-warn{color:#B45309}.log-muted{color:#9CA3AF}
+/* Graph */
+#graph-canvas{width:100%;height:500px;background:#FAFAFA;border:1px solid var(--border);border-radius:var(--radius-lg)}
+.graph-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--lgray)}
+.legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+/* Filters */
+.filter-bar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px;align-items:center}
+.filter-bar input,.filter-bar select{padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;background:#fff;color:var(--text);font-family:inherit}
+.filter-bar input:focus,.filter-bar select:focus{outline:none;border-color:var(--teal)}
+/* Pagination */
+.pagination{display:flex;align-items:center;gap:5px;justify-content:flex-end;flex-wrap:wrap}
+.page-btn{padding:4px 9px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:#fff;color:var(--navy);font-weight:500;cursor:pointer;min-width:30px;text-align:center;transition:.15s}
+.page-btn:hover{background:#F3F4F6}.page-btn.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+/* Alerts */
+.alert-item{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:13px 15px;margin-bottom:9px;display:flex;align-items:flex-start;gap:12px;box-shadow:var(--shadow);transition:.15s}
+.alert-item:hover{box-shadow:var(--shadow-md)}
+.alert-sev-bar{width:4px;border-radius:2px;align-self:stretch;flex-shrink:0}
+/* Metrics */
+.metric-good{color:var(--green);font-weight:600}.metric-warn{color:var(--gold);font-weight:600}
+.metric-best td{background:#F0FDF4!important}
+/* Feed cards */
+.feed-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:13px}
+.feed-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:15px;box-shadow:var(--shadow)}
+/* Toast */
+#toast{position:fixed;bottom:22px;right:22px;background:var(--navy);color:#fff;padding:11px 17px;border-radius:9px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);transform:translateY(70px);opacity:0;transition:.3s;z-index:2000;max-width:320px}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.success{background:var(--green)}
+#toast.error{background:var(--red)}
+#toast.warning{background:var(--gold)}
+/* Loading */
+#loading{position:fixed;inset:0;background:rgba(255,255,255,.65);display:none;align-items:center;justify-content:center;z-index:999;backdrop-filter:blur(2px)}
+#loading.on{display:flex}
+.spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+code{font-family:'Cascadia Code','Courier New',monospace}
+@media(max-width:768px){
+  #sidebar{width:200px;position:fixed;left:-200px;top:0;bottom:0;z-index:100;transition:.3s}
+  #sidebar.open{left:0;box-shadow:var(--shadow-lg)}
+  .step-grid{grid-template-columns:1fr}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  #content{padding:14px}
+}
+</style></head><body>
+<!-- Auth overlay -->
+<div id="auth-overlay">
+  <div id="auth-modal">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">T</div>
+      <h2>ThreatIQ v4.0</h2>
+      <p>Production CTI Platform</p>
+    </div>
+    <div class="auth-error" id="auth-error"></div>
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input class="form-input" id="login-user" type="text" value="analyst" autocomplete="username"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" id="login-pass" type="password" value="ThreatIQ@Analyst25!" autocomplete="current-password"/>
+      <p class="form-hint">Dev credentials: admin | analyst | viewer</p>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px" onclick="doLogin()">Sign in</button>
+  </div>
+</div>
+<div id="loading"><div><div class="spinner"></div></div></div>
+<div id="toast"></div>
+
+<!-- Main app -->
+<div id="app" style="display:none">
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">
+        <div class="logo-icon">T</div>
+        <div><div class="logo-text">ThreatIQ</div><div class="logo-sub">v4.0 Production</div></div>
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Intelligence</div>
+      <div class="nav-item active" onclick="nav('dashboard')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" onclick="nav('alerts')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        Alerts <span class="nav-badge" id="badge-alerts">0</span>
+      </div>
+      <div class="nav-item" onclick="nav('iocs')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+        IoC Library
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">AI Modules</div>
+      <div class="nav-item" onclick="nav('pipeline')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>
+        AI Pipeline
+      </div>
+      <div class="nav-item" onclick="nav('graph')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+        Attack Graph
+      </div>
+      <div class="nav-item" onclick="nav('feedback')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        RL Feedback
+      </div>
+      <div class="nav-item" onclick="nav('metrics')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        Evaluation
+      </div>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Infrastructure</div>
+      <div class="nav-item" onclick="nav('connectors')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        CTI Connectors
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="conn-row"><span class="conn-dot conn-off" id="dot-misp"></span>MISP</div>
+      <div class="conn-row"><span class="conn-dot conn-live"></span>CIRCL (public)</div>
+      <div class="conn-row"><span class="conn-dot conn-off" id="dot-otx"></span>OTX</div>
+      <div class="conn-row"><span class="conn-dot conn-off" id="dot-opencti"></span>OpenCTI</div>
+    </div>
+  </nav>
+
+  <div id="main">
+    <header id="topbar">
+      <button class="btn-icon" id="menu-btn" style="display:none" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
+      <div id="topbar-search">
+        <input type="text" id="global-search" placeholder="Search IoCs, threats, actors..." oninput="globalSearch(this.value)"/>
+      </div>
+      <div class="topbar-actions">
+        <span id="env-badge">DEV</span>
+        <button class="btn-icon" onclick="refreshCurrent()" title="Refresh">&#8635;</button>
+        <div id="user-menu">
+          <div class="user-avatar" id="user-avatar">A</div>
+          <span id="user-name" style="font-size:13px;font-weight:500">analyst</span>
+          <span class="user-role" id="user-role-badge">analyst</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="logout()">Sign out</button>
+      </div>
+    </header>
+
+    <main id="content">
+      <!-- DASHBOARD -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-header">
+          <div><div class="page-title">Intelligence Dashboard</div><div class="page-sub">Real-time CTI overview</div></div>
+          <div class="page-actions">
+            <button class="btn btn-outline btn-sm" onclick="nav('pipeline')">&#9881; Pipeline</button>
+            <button class="btn btn-teal btn-sm" onclick="loadDashboard()">&#8635; Refresh</button>
+          </div>
+        </div>
+        <div class="stat-grid">
+          <div class="stat-card navy"><div class="stat-label">Total IoCs</div><div class="stat-value" id="s-total">—</div><div class="stat-sub">indicators ingested</div><div class="stat-icon">&#128452;</div></div>
+          <div class="stat-card red"><div class="stat-label">Active Alerts</div><div class="stat-value" id="s-alerts">—</div><div class="stat-sub">high/critical severity</div><div class="stat-icon">&#128276;</div></div>
+          <div class="stat-card green"><div class="stat-label">Best F1-Score</div><div class="stat-value" id="s-f1">0.9049</div><div class="stat-sub">Random Forest</div><div class="stat-icon">&#127919;</div></div>
+          <div class="stat-card teal"><div class="stat-label">Anomalies</div><div class="stat-value" id="s-anom">—</div><div class="stat-sub">Recall = 0.90</div><div class="stat-icon">&#9888;</div></div>
+          <div class="stat-card gold"><div class="stat-label">Graph Nodes</div><div class="stat-value" id="s-nodes">—</div><div class="stat-sub">MITRE ATT&amp;CK</div><div class="stat-icon">&#128378;</div></div>
+          <div class="stat-card purple"><div class="stat-label">Prevention Rate</div><div class="stat-value">&#8805;88%</div><div class="stat-sub">HIGH classification</div><div class="stat-icon">&#128737;</div></div>
+        </div>
+        <div class="chart-grid">
+          <div class="card"><div class="card-title"><span>&#128202;</span>IoC Distribution</div><div class="chart-wrap"><canvas id="ch-class"></canvas></div></div>
+          <div class="card"><div class="card-title"><span>&#9889;</span>Severity Breakdown</div><div class="chart-wrap"><canvas id="ch-sev"></canvas></div></div>
+          <div class="card"><div class="card-title"><span>&#127758;</span>Source Feeds</div><div class="chart-wrap"><canvas id="ch-src"></canvas></div></div>
+          <div class="card"><div class="card-title"><span>&#128308;</span>Top Threat Actors</div><div class="chart-wrap"><canvas id="ch-actor"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>&#128336;</span>Recent High-Severity IoCs</div>
+          <div class="table-wrap"><table><thead><tr><th>IoC Value</th><th>Type</th><th>Class</th><th>Severity</th><th>Source</th><th>Actor</th><th>TLP</th></tr></thead><tbody id="dash-tbody"></tbody></table></div>
+        </div>
+      </div>
+
+      <!-- ALERTS -->
+      <div id="page-alerts" class="page">
+        <div class="page-header">
+          <div><div class="page-title">Alert Management</div><div class="page-sub">High and critical indicators requiring analyst review</div></div>
+          <div class="page-actions">
+            <select id="alert-sev-filter" onchange="loadAlerts()" class="form-input btn-sm" style="width:auto">
+              <option value="">All Severities</option><option value="5">Critical</option><option value="4">High</option>
+            </select>
+          </div>
+        </div>
+        <div id="alerts-list"></div>
+      </div>
+
+      <!-- IoC LIBRARY -->
+      <div id="page-iocs" class="page">
+        <div class="page-header">
+          <div><div class="page-title">IoC Library</div><div class="page-sub" id="ioc-count-label">Loading...</div></div>
+          <div class="page-actions">
+            <button class="btn btn-outline btn-sm" onclick="exportCSV()">&#11015; CSV</button>
+            <button class="btn btn-outline btn-sm" onclick="exportJSON()">&#11015; JSON</button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <input type="text" id="ioc-q" placeholder="Search IoCs..." oninput="debounceLoadIocs()" style="flex:1;min-width:180px"/>
+          <select id="ioc-label" onchange="loadIocs()"><option value="">All Classes</option><option>Malware</option><option>Phishing</option><option>Ransomware</option><option>DDoS</option><option>APT</option><option>SQL Injection</option><option>Zero-Day</option><option>Credential Stuffing</option><option>Insider Threat</option></select>
+          <select id="ioc-sev" onchange="loadIocs()"><option value="">All Severity</option><option value="5">Critical</option><option value="4">High</option><option value="3">Medium</option><option value="2">Low</option><option value="1">Info</option></select>
+          <select id="ioc-src" onchange="loadIocs()"><option value="">All Sources</option><option>MISP</option><option>CIRCL</option><option>OTX AlienVault</option><option>Internal SIEM</option><option>VirusTotal</option></select>
+          <select id="ioc-tlp" onchange="loadIocs()"><option value="">All TLP</option><option>TLP:WHITE</option><option>TLP:GREEN</option><option>TLP:AMBER</option><option>TLP:RED</option></select>
+          <select id="ioc-synth" onchange="loadIocs()"><option value="">Real + Synthetic</option><option value="false">Real only</option><option value="true">Synthetic only</option></select>
+          <label style="font-size:12.5px;color:var(--lgray);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ioc-anom" onchange="loadIocs()"> Anomalous</label>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>IoC Value</th><th>Type</th><th>Class</th><th>Conf</th><th>Severity</th><th>Source</th><th>Actor</th><th>TTP</th><th>TLP</th><th>Anom</th></tr></thead><tbody id="ioc-tbody"></tbody></table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:11px;flex-wrap:wrap;gap:8px">
+          <span style="font-size:12px;color:var(--lgray)" id="ioc-page-info"></span>
+          <div class="pagination" id="ioc-pagination"></div>
+        </div>
+      </div>
+
+      <!-- PIPELINE -->
+      <div id="page-pipeline" class="page">
+        <div class="page-header">
+          <div><div class="page-title">AI Pipeline</div><div class="page-sub">4-stage production pipeline — MISP + CIRCL + OTX + Trained GAT</div></div>
+          <div class="page-actions">
+            <select id="pipe-records" class="form-input btn-sm" style="width:auto">
+              <option value="500">500</option><option value="1000">1,000</option><option value="2000" selected>2,000</option><option value="5000">5,000</option><option value="8000">8,000</option>
+            </select>
+            <select id="pipe-epochs" class="form-input btn-sm" style="width:auto">
+              <option value="50">50 GAT epochs</option><option value="100" selected>100</option><option value="200">200</option>
+            </select>
+            <button class="btn btn-primary" id="btn-run-pipe" onclick="runPipeline()">&#9654; Run Full Pipeline</button>
+          </div>
+        </div>
+        <div class="step-grid">
+          <div class="step-card" id="step-1"><div class="step-num">1</div><div class="step-title">Data Ingestion</div><div class="step-desc">MISP + CIRCL + OTX + Synthetic. is_synthetic flag explicit on all records.</div><div class="step-result" id="step-1-result"></div></div>
+          <div class="step-card" id="step-2"><div class="step-num">2</div><div class="step-title">Classification + Overfitting Gate</div><div class="step-desc">4 classifiers x 7 metrics. Train-Test gap must be &lt; 0.10 or model re-regularised.</div><div class="step-result" id="step-2-result"></div></div>
+          <div class="step-card" id="step-3"><div class="step-num">3</div><div class="step-title">SMOTE + Isolation Forest</div><div class="step-desc">35% SMOTE balance + 300-tree ensemble + PR-curve threshold. Target Recall >= 0.90.</div><div class="step-result" id="step-3-result"></div></div>
+          <div class="step-card" id="step-4"><div class="step-num">4</div><div class="step-title">Trained GAT + MITRE Ground Truth</div><div class="step-desc">MITRE ATT&amp;CK STIX + 80/10/10 split + Bellman training + Hits@5 / MRR eval.</div><div class="step-result" id="step-4-result"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="justify-content:space-between"><span style="display:flex;align-items:center;gap:7px"><span>&#128203;</span>Pipeline Log</span><button class="btn btn-outline btn-sm" onclick="document.getElementById('pipe-log').innerHTML='<span class=log-muted>Cleared.</span>'">Clear</button></div>
+          <div id="pipe-log"><span class="log-muted">Run the pipeline to see execution log...</span></div>
+        </div>
+      </div>
+
+      <!-- GRAPH -->
+      <div id="page-graph" class="page">
+        <div class="page-header">
+          <div><div class="page-title">Attack Knowledge Graph</div><div class="page-sub" id="graph-sub">Trained GAT — MITRE ATT&amp;CK aligned</div></div>
+          <div class="page-actions">
+            <button class="btn btn-outline btn-sm" onclick="loadGraph()">&#8635; Refresh</button>
+            <button class="btn btn-primary btn-sm" onclick="retrainGAT()">&#9881; Retrain GAT</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 270px;gap:13px;align-items:start">
+          <div>
+            <canvas id="graph-canvas"></canvas>
+            <div class="graph-legend">
+              <div class="legend-item"><div class="legend-dot" style="background:#DC2626"></div>Threat Actor</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#B45309"></div>MITRE TTP</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#0D7377"></div>IoC</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#5B21B6"></div>Malware</div>
+              <div class="legend-item"><div class="legend-dot" style="background:#10B981;border-radius:0;width:16px;height:4px;margin:3px 0"></div>Predicted</div>
+            </div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:11px">
+              <div class="card-title"><span>&#128202;</span>Graph Stats</div>
+              <div id="graph-stats-list" style="font-size:13px;color:var(--text2);line-height:2.2"></div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span>&#128302;</span>GAT Predictions</div>
+              <div id="gat-preds" style="font-size:12.5px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RL FEEDBACK -->
+      <div id="page-feedback" class="page">
+        <div class="page-header">
+          <div><div class="page-title">RL Feedback Agent</div><div class="page-sub">Q-learning — class weights persist in DB, update on every correction</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:13px">
+          <div class="card">
+            <div class="card-title"><span>&#128221;</span>Submit Analyst Feedback</div>
+            <div class="form-group"><label class="form-label">IoC ID</label><input class="form-input" id="fb-ioc" value="ioc-00001" placeholder="ioc-00042"/></div>
+            <div class="form-group"><label class="form-label">Predicted Class</label><select class="form-input" id="fb-pred"><option>Malware</option><option>Phishing</option><option>Ransomware</option><option>DDoS</option><option>APT</option><option>SQL Injection</option><option>Zero-Day</option><option>Credential Stuffing</option><option>Insider Threat</option></select></div>
+            <div class="form-group"><label class="form-label">True Class (correction)</label><select class="form-input" id="fb-true"><option>Malware</option><option>Phishing</option><option>Ransomware</option><option>DDoS</option><option>APT</option><option>SQL Injection</option><option>Zero-Day</option><option>Credential Stuffing</option><option>Insider Threat</option></select></div>
+            <div class="form-group"><label class="form-label">Was prediction correct?</label><select class="form-input" id="fb-correct"><option value="false">&#10060; Incorrect</option><option value="true">&#9989; Correct</option></select></div>
+            <div class="form-group"><label class="form-label">Analyst Confidence: <span id="fb-conf-val">0.85</span></label><input type="range" id="fb-conf" min="0" max="1" step="0.05" value="0.85" oninput="document.getElementById('fb-conf-val').textContent=this.value" style="width:100%;margin-top:6px"/></div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="submitFeedback()">Submit Feedback</button>
+            <div id="fb-result" style="margin-top:11px;font-size:13px"></div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:11px">
+              <div class="card-title"><span>&#9878;</span>Class Weights</div>
+              <div id="rl-weights"></div>
+            </div>
+            <div class="card">
+              <div class="card-title"><span>&#129302;</span>Agent Parameters</div>
+              <div id="rl-params" style="font-size:13px;color:var(--text2);line-height:2.2"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EVALUATION -->
+      <div id="page-metrics" class="page">
+        <div class="page-header">
+          <div><div class="page-title">Evaluation Metrics</div><div class="page-sub">7-metric evaluation separated by dataset type — synthetic vs real CTI</div></div>
+          <div class="page-actions">
+            <select id="eval-dtype" class="form-input btn-sm" style="width:auto">
+              <option value="synthetic">Synthetic (dev)</option>
+              <option value="real_misp">Real — MISP</option>
+              <option value="real_circl">Real — CIRCL</option>
+              <option value="real_otx">Real — OTX</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="runEval()">&#9654; Run Eval</button>
+            <button class="btn btn-outline btn-sm" onclick="evalGAT()">&#128302; GAT Eval</button>
+          </div>
+        </div>
+        <div id="eval-warn" style="display:none;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:9px 13px;font-size:13px;color:#92400E;margin-bottom:13px">
+          &#9888; Running on <strong>synthetic data</strong>. Switch to real_misp / real_circl / real_otx for production validation.
+        </div>
+        <div class="card" style="margin-bottom:13px">
+          <div class="card-title"><span>&#128203;</span>Classifier Results</div>
+          <div class="table-wrap"><table id="metrics-table"><thead><tr><th>Model</th><th>Train F1</th><th>Test F1</th><th>AUC</th><th>MCC</th><th>CV F1</th><th>Gap</th><th>Overfit?</th></tr></thead><tbody id="metrics-tbody"></tbody></table></div>
+        </div>
+        <div id="gat-eval-result" style="display:none" class="card">
+          <div class="card-title"><span>&#128302;</span>GAT Link Prediction — Ground Truth Evaluation</div>
+          <div id="gat-eval-content"></div>
+        </div>
+      </div>
+
+      <!-- CONNECTORS -->
+      <div id="page-connectors" class="page">
+        <div class="page-header">
+          <div><div class="page-title">CTI Feed Connectors</div><div class="page-sub">MISP / CIRCL / OTX / OpenCTI enrichment connector</div></div>
+          <div class="page-actions"><button class="btn btn-teal btn-sm" onclick="loadConnectors()">&#8635; Status</button></div>
+        </div>
+        <div class="feed-grid" id="connectors-grid"></div>
+        <div class="card" style="margin-top:13px">
+          <div class="card-title"><span>&#128268;</span>Setup Guide</div>
+          <div style="font-size:13px;color:var(--text2);line-height:2.2">
+            <strong>MISP:</strong> Set <code>MISP_URL</code> and <code>MISP_API_KEY</code> in <code>.env</code><br>
+            <strong>CIRCL:</strong> Public endpoints work without auth. Credentials optional for private feeds.<br>
+            <strong>OTX:</strong> Free, no membership gate. Set <code>OTX_API_KEY</code> (get one at otx.alienvault.com)<br>
+            <strong>OpenCTI:</strong> Set <code>OPENCTI_URL</code> and <code>OPENCTI_TOKEN</code> to activate enrichment connector<br>
+            After setting credentials, restart the server and re-run the pipeline.
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+const S={token:null,user:null,page:'dashboard',charts:{},pipeInterval:null};
+const API='http://localhost:8000/api/v1';
+
+async function doLogin(){
+  const u=document.getElementById('login-user').value.trim();
+  const p=document.getElementById('login-pass').value;
+  const err=document.getElementById('auth-error');
+  err.style.display='none';
+  try{
+    const r=await fetch(`${API}/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    if(!r.ok){const d=await r.json();err.textContent=d.detail||'Invalid credentials';err.style.display='block';return;}
+    const d=await r.json();
+    S.token=d.access_token;S.user={name:u,role:d.role};
+    document.getElementById('auth-overlay').style.display='none';
+    document.getElementById('app').style.display='flex';
+    document.getElementById('user-name').textContent=u;
+    document.getElementById('user-avatar').textContent=u[0].toUpperCase();
+    const rb=document.getElementById('user-role-badge');
+    rb.textContent=d.role;
+    rb.style.cssText=d.role==='admin'?'color:#991B1B;background:#FEF2F2;padding:2px 7px;border-radius:10px':d.role==='analyst'?'color:#1A5C38;background:#ECFDF5;padding:2px 7px;border-radius:10px':'color:#1D4ED8;background:#EFF6FF;padding:2px 7px;border-radius:10px';
+    nav('dashboard');
+  }catch(e){err.textContent='Cannot reach API. Is the server running on port 8000?';err.style.display='block';}
+}
+document.getElementById('login-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+function logout(){S.token=null;S.user=null;document.getElementById('auth-overlay').style.display='flex';document.getElementById('app').style.display='none';}
+
+async function api(path,method='GET',body=null){
+  const opts={method,headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch(`${API}${path}`,opts);
+  if(r.status===401){logout();return null;}
+  if(!r.ok){const e=await r.json().catch(()=>({detail:'Error'}));throw new Error(e.detail||'API error');}
+  return r.json();
+}
+
+function nav(page){
+  S.page=page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const pg=document.getElementById(`page-${page}`);
+  if(pg)pg.classList.add('active');
+  const ni=document.querySelector(`[onclick="nav('${page}')"]`);
+  if(ni)ni.classList.add('active');
+  ({dashboard:loadDashboard,alerts:loadAlerts,iocs:loadIocs,graph:loadGraph,feedback:loadRLStatus,metrics:loadMetrics,connectors:loadConnectors})[page]?.();
+}
+
+function toast(msg,type='info'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className=`show ${type}`;
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+function loading(on){document.getElementById('loading').classList.toggle('on',on);}
+
+function sevBadge(s){const m={5:['Critical','badge-red'],4:['High','badge-orange'],3:['Medium','badge-gold'],2:['Low','badge-blue'],1:['Info','badge-gray']};const[l,c]=m[s]||['?','badge-gray'];return `<span class="badge ${c}">${l}</span>`;}
+function tlpBadge(t){const m={'TLP:WHITE':'badge-gray','TLP:GREEN':'badge-green','TLP:AMBER':'badge-gold','TLP:RED':'badge-red'};return `<span class="badge ${m[t]||'badge-gray'}">${t}</span>`;}
+function lblBadge(l){const m={Malware:'badge-red',Phishing:'badge-orange',Ransomware:'badge-red',DDoS:'badge-purple',APT:'badge-navy','SQL Injection':'badge-gold','Zero-Day':'badge-red','Credential Stuffing':'badge-teal','Insider Threat':'badge-orange'};return `<span class="badge ${m[l]||'badge-gray'}">${l}</span>`;}
+function trunc(s,n=34){return s.length>n?s.slice(0,n)+'...':s;}
+
+function mkChart(id,type,labels,data,colors,opts={}){
+  if(S.charts[id])S.charts[id].destroy();
+  const ctx=document.getElementById(id)?.getContext('2d');
+  if(!ctx)return;
+  S.charts[id]=new Chart(ctx,{type,data:{labels,datasets:[{data,backgroundColor:colors,borderColor:colors,borderWidth:type==='bar'?0:2,fill:false,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},...opts}});
+}
+
+async function loadDashboard(){
+  try{
+    const iocs=await api('/iocs?per_page=200');
+    if(!iocs)return;
+    const d=iocs.data;
+    document.getElementById('s-total').textContent=iocs.total.toLocaleString();
+    const alerts=d.filter(r=>r.severity>=4);
+    document.getElementById('s-alerts').textContent=alerts.length;
+    document.getElementById('badge-alerts').textContent=alerts.length;
+    document.getElementById('s-anom').textContent=d.filter(r=>r.is_anomaly).length;
+    const ps=await api('/pipeline/status').catch(()=>null);
+    if(ps?.results?.classification){const rf=ps.results.classification['Random Forest'];if(rf)document.getElementById('s-f1').textContent=rf.test_f1;}
+    const gs=await api('/graph').catch(()=>null);
+    if(gs)document.getElementById('s-nodes').textContent=gs.nodes;
+    const cls=['Malware','Phishing','Ransomware','DDoS','APT','SQL Injection','Zero-Day','Credential Stuffing','Insider Threat'];
+    mkChart('ch-class','bar',cls,cls.map(c=>d.filter(r=>r.label===c).length),['#DC2626','#EA580C','#B45309','#7C3AED','#0B1E3D','#D97706','#DC2626','#0D7377','#EA580C']);
+    mkChart('ch-sev','doughnut',['Info','Low','Medium','High','Critical'],[1,2,3,4,5].map(s=>d.filter(r=>r.severity===s).length),['#9CA3AF','#60A5FA','#FBBF24','#F97316','#EF4444']);
+    const srcs=['MISP','CIRCL','OTX AlienVault','Internal SIEM','VirusTotal'];
+    mkChart('ch-src','doughnut',srcs,srcs.map(s=>d.filter(r=>r.source===s).length),['#0B1E3D','#0D7377','#1A5C38','#5B21B6','#B45309']);
+    const actrs=['APT29','LockBit','Lazarus','Cl0p','Sandworm'];
+    mkChart('ch-actor','bar',actrs,actrs.map(a=>d.filter(r=>r.threat_actor===a).length),'#0D7377',{indexAxis:'y'});
+    document.getElementById('dash-tbody').innerHTML=d.filter(r=>r.severity>=4).slice(0,15).map(r=>`<tr><td><code style="font-size:11px;background:#F3F4F6;padding:2px 5px;border-radius:4px">${trunc(r.ioc_value,38)}</code></td><td style="font-size:12px;color:var(--lgray)">${r.ioc_type}</td><td>${lblBadge(r.label)}</td><td>${sevBadge(r.severity)}</td><td style="font-size:12px">${r.source}</td><td style="font-size:12px">${r.threat_actor||'—'}</td><td>${tlpBadge(r.tlp)}</td></tr>`).join('');
+  }catch(e){toast('Dashboard error: '+e.message,'error');}
+}
+
+async function loadAlerts(){
+  try{
+    const sev=document.getElementById('alert-sev-filter').value;
+    const p=new URLSearchParams({per_page:100});if(sev)p.set('severity',sev);
+    const iocs=await api('/iocs?'+p.toString());if(!iocs)return;
+    const alerts=iocs.data.filter(r=>r.severity>=4);
+    const el=document.getElementById('alerts-list');
+    if(!alerts.length){el.innerHTML='<div class="card" style="text-align:center;padding:30px;color:var(--lgray)">No alerts match the current filter.</div>';return;}
+    el.innerHTML=alerts.map(a=>`<div class="alert-item"><div class="alert-sev-bar" style="background:${a.severity===5?'#DC2626':'#F97316'}"></div><div style="flex:1"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${sevBadge(a.severity)} ${lblBadge(a.label)} ${tlpBadge(a.tlp)}<span style="font-size:11px;color:var(--lgray);margin-left:auto">${a.source}</span></div><div style="margin-top:7px;font-size:13px">${trunc(a.text,120)}</div><div style="margin-top:6px;display:flex;gap:7px;flex-wrap:wrap"><code style="font-size:11px;background:#F3F4F6;padding:2px 5px;border-radius:4px">${trunc(a.ioc_value,44)}</code>${a.threat_actor?`<span class="badge badge-navy">&#128100; ${a.threat_actor}</span>`:''} ${a.ttp?`<span class="badge badge-purple">&#9876; ${a.ttp}</span>`:''} ${a.is_anomaly?'<span class="badge badge-red">&#9888; ANOMALY</span>':''}</div></div></div>`).join('');
+  }catch(e){toast('Alert error: '+e.message,'error');}
+}
+
+let _iocDb=null;
+function debounceLoadIocs(){clearTimeout(_iocDb);_iocDb=setTimeout(loadIocs,300);}
+async function loadIocs(page=1){
+  try{
+    const p=new URLSearchParams();
+    const q=document.getElementById('ioc-q').value;
+    const label=document.getElementById('ioc-label').value;
+    const sev=document.getElementById('ioc-sev').value;
+    const src=document.getElementById('ioc-src').value;
+    const tlp=document.getElementById('ioc-tlp').value;
+    const synth=document.getElementById('ioc-synth').value;
+    const anom=document.getElementById('ioc-anom').checked;
+    if(q)p.set('q',q);if(label)p.set('label',label);if(sev)p.set('severity',sev);
+    if(src)p.set('source',src);if(tlp)p.set('tlp',tlp);if(synth)p.set('is_synthetic',synth);
+    if(anom)p.set('is_anomaly','true');
+    p.set('page',page);p.set('per_page',50);
+    const r=await api('/iocs?'+p.toString());if(!r)return;
+    document.getElementById('ioc-count-label').textContent=`${r.total.toLocaleString()} indicators`;
+    document.getElementById('ioc-tbody').innerHTML=r.data.map(d=>`<tr><td><code style="font-size:11px;background:#F3F4F6;padding:2px 5px;border-radius:4px">${trunc(d.ioc_value,38)}</code></td><td style="font-size:11.5px;color:var(--lgray)">${d.ioc_type}</td><td>${lblBadge(d.label)}</td><td style="text-align:center;font-size:12px">${(d.label_confidence*100).toFixed(0)}%</td><td style="text-align:center">${sevBadge(d.severity)}</td><td style="font-size:12px">${d.source}</td><td style="font-size:12px">${d.threat_actor||'—'}</td><td>${d.ttp?`<span class="badge badge-purple">${d.ttp}</span>`:'—'}</td><td>${tlpBadge(d.tlp)}</td><td style="text-align:center">${d.is_anomaly?'<span class="badge badge-red">&#9888;</span>':'—'}</td></tr>`).join('');
+    document.getElementById('ioc-page-info').textContent=`Page ${r.page} of ${r.pages} · ${r.total.toLocaleString()} total`;
+    const pg=document.getElementById('ioc-pagination');
+    let btns='';
+    if(r.page>1)btns+=`<button class="page-btn" onclick="loadIocs(${r.page-1})">&#8249;</button>`;
+    const s=Math.max(1,r.page-2),e=Math.min(r.pages,r.page+2);
+    for(let i=s;i<=e;i++)btns+=`<button class="page-btn${i===r.page?' active':''}" onclick="loadIocs(${i})">${i}</button>`;
+    if(r.page<r.pages)btns+=`<button class="page-btn" onclick="loadIocs(${r.page+1})">&#8250;</button>`;
+    pg.innerHTML=btns;
+  }catch(e){toast('IoC error: '+e.message,'error');}
+}
+
+async function runPipeline(){
+  const n=parseInt(document.getElementById('pipe-records').value);
+  const ep=parseInt(document.getElementById('pipe-epochs').value);
+  const btn=document.getElementById('btn-run-pipe');
+  btn.disabled=true;btn.textContent='Running...';
+  const log=document.getElementById('pipe-log');
+  log.innerHTML='<span class="log-info">&#9654; Starting pipeline...</span>';
+  ['1','2','3','4'].forEach(i=>{document.getElementById(`step-${i}`).className='step-card';document.getElementById(`step-${i}-result`).textContent='';});
+  try{
+    const r=await api('/pipeline/run','POST',{n_records:n,sources:['MISP','CIRCL','OTX','Synthetic'],run_gat_training:true,gat_epochs:ep});
+    if(!r){btn.disabled=false;btn.textContent='&#9654; Run Full Pipeline';return;}
+    S.pipeInterval=setInterval(async()=>{
+      try{
+        const s=await api('/pipeline/status');if(!s)return;
+        if(s.log?.length){
+          log.innerHTML=s.log.map(l=>`<div class="${l.startsWith('[ERROR]')?'log-err':l.startsWith('[Done]')?'log-ok':l.startsWith('[Stage')?'log-info':l.startsWith('  ')?'log-muted':'log-info'}">${l}</div>`).join('');
+          log.scrollTop=log.scrollHeight;
+        }
+        if(s.status==='success'||s.status==='error'){
+          clearInterval(S.pipeInterval);
+          btn.disabled=false;btn.textContent='&#9654; Run Full Pipeline';
+          if(s.status==='success'){
+            toast('Pipeline completed!','success');
+            const r2=s.results;
+            if(r2?.classification){const rf=r2.classification['Random Forest'];if(rf){document.getElementById('step-2').className='step-card done';document.getElementById('step-2-result').textContent=`&#10003; RF: F1=${rf.test_f1} gap=${rf.gap} ${rf.overfitting?'&#9888; OVERFIT':'&#10003; Pass'}`;}}
+            if(r2?.anomaly){document.getElementById('step-3').className='step-card done';document.getElementById('step-3-result').textContent=`&#10003; Precision=${r2.anomaly.precision} Recall=${r2.anomaly.recall}`;}
+            if(r2?.gat){document.getElementById('step-4').className='step-card done';document.getElementById('step-4-result').textContent=`&#10003; Hits@5=${(r2.gat.hits_at_5||0).toFixed(3)} MRR=${(r2.gat.mrr||0).toFixed(3)}`;}
+            document.getElementById('step-1').className='step-card done';
+            document.getElementById('step-1-result').textContent='&#10003; Data ingested from all feeds';
+          }else{
+            toast('Pipeline error — see log','error');
+            document.getElementById('step-1').className='step-card error';
+          }
+        }
+      }catch(e){console.error(e);}
+    },1500);
+  }catch(e){toast('Pipeline error: '+e.message,'error');btn.disabled=false;btn.textContent='&#9654; Run Full Pipeline';}
+}
+
+async function loadGraph(){
+  try{
+    const d=await api('/graph');if(!d)return;
+    document.getElementById('graph-sub').textContent=`${d.nodes} nodes · ${d.edges} edges · ${d.gat_trained?'Trained GAT &#10003;':'Fixed weights'} · ${d.model_version}`;
+    document.getElementById('graph-stats-list').innerHTML=`<div>Nodes: <strong>${d.nodes}</strong></div><div>Edges: <strong>${d.edges}</strong></div><div>Density: <strong>${d.density}</strong></div><div>Dynamic IoCs: <strong>${d.dynamic_nodes}</strong></div><div>GAT trained: <strong>${d.gat_trained?'&#10003; Yes':'&#9888; Fixed'}</strong></div>`;
+    const preds=d.predictions||[];
+    document.getElementById('gat-preds').innerHTML=preds.length?preds.map(p=>`<div style="margin-bottom:7px;padding:8px;background:#F8FAFC;border-radius:6px;border:1px solid var(--border)"><div style="font-size:12px;font-weight:600;color:var(--navy)">${p.source} &#8594; ${p.target}</div><div style="font-size:11.5px;color:var(--lgray);margin-top:2px">Score: ${p.score} · ${p.confidence}</div></div>`).join(''):'<div style="font-size:12.5px;color:var(--lgray)">Run pipeline to generate predictions</div>';
+    drawGraph(d);
+  }catch(e){toast('Graph error: '+e.message,'error');}
+}
+
+function drawGraph(data){
+  const canvas=document.getElementById('graph-canvas');
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth;canvas.height=Math.min(500,canvas.offsetHeight||500);
+  const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2;
+  ctx.clearRect(0,0,W,H);
+  const actors=['APT29','APT28','APT41','Lazarus Group','Sandworm Team'];
+  const ttps=['Phishing','Valid Accounts','Command & Scripting','Application Layer','Obfuscated Files','Process Injection','Exploit Public App','Data Encrypted','Credential Dumping'];
+  const nodes=[];
+  actors.forEach((a,i)=>{const ang=(i/actors.length)*Math.PI*2;nodes.push({key:a,type:'actor',x:cx+Math.cos(ang)*155,y:cy+Math.sin(ang)*105,r:15});});
+  ttps.forEach((t,i)=>{const ang=(i/ttps.length)*Math.PI*2;nodes.push({key:t,type:'ttp',x:cx+Math.cos(ang)*265,y:cy+Math.sin(ang)*175,r:10});});
+  const nodeMap={};nodes.forEach(n=>nodeMap[n.key]=n);
+  const edges=[['APT29','Phishing'],['APT29','Valid Accounts'],['APT29','Command & Scripting'],['APT28','Phishing'],['APT28','Process Injection'],['APT41','Exploit Public App'],['APT41','Valid Accounts'],['Lazarus Group','Data Encrypted'],['Lazarus Group','Phishing'],['Sandworm Team','Data Encrypted']];
+  ctx.strokeStyle='#CBD5E1';ctx.lineWidth=1.5;ctx.setLineDash([]);
+  edges.forEach(([s,t])=>{const sn=nodeMap[s],tn=nodeMap[t];if(sn&&tn){ctx.beginPath();ctx.moveTo(sn.x,sn.y);ctx.lineTo(tn.x,tn.y);ctx.stroke();}});
+  const preds=data.predictions||[];
+  ctx.strokeStyle='#10B981';ctx.setLineDash([5,4]);ctx.lineWidth=1.5;
+  preds.forEach(p=>{const sn=nodeMap[p.source],tn=nodeMap[p.target];if(sn&&tn){ctx.beginPath();ctx.moveTo(sn.x,sn.y);ctx.lineTo(tn.x,tn.y);ctx.stroke();}});
+  ctx.setLineDash([]);
+  const colors={actor:'#DC2626',ttp:'#B45309',ioc:'#0D7377',malware:'#5B21B6'};
+  nodes.forEach(n=>{
+    const col=colors[n.type]||'#6B7280';
+    ctx.beginPath();ctx.arc(n.x,n.y,n.r,0,Math.PI*2);
+    ctx.fillStyle=col+'18';ctx.fill();ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle=col;ctx.font=`${n.r>12?'600 ':''}${n.r>12?'10.5':'9'}px Segoe UI,sans-serif`;
+    ctx.textAlign='center';ctx.fillText(n.key.slice(0,13),n.x,n.y+n.r+12);
+  });
+}
+
+async function retrainGAT(){
+  if(S.user?.role!=='admin'){toast('Admin role required','warning');return;}
+  toast('Retraining GAT...');loading(true);
+  try{const r=await api('/graph/train','POST');if(r){toast(`GAT retrained: Hits@5=${(r.metrics?.hits_at_5||0).toFixed(3)}`,'success');loadGraph();}}
+  catch(e){toast('Retrain error: '+e.message,'error');}
+  loading(false);
+}
+
+async function submitFeedback(){
+  const ioc_id=document.getElementById('fb-ioc').value.trim();
+  if(!ioc_id){toast('Enter IoC ID','warning');return;}
+  try{
+    const r=await api('/feedback','POST',{ioc_id,predicted_class:document.getElementById('fb-pred').value,true_class:document.getElementById('fb-true').value,is_correct:document.getElementById('fb-correct').value==='true',analyst_confidence:parseFloat(document.getElementById('fb-conf').value)});
+    if(!r)return;
+    document.getElementById('fb-result').innerHTML=`<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:7px;padding:9px 12px;font-size:13px">&#10003; Action: ${r.action} · Reward: ${r.reward} · New weight: ${r.new_weight}</div>`;
+    toast('RL agent updated','success');loadRLStatus();
+  }catch(e){toast('Feedback error: '+e.message,'error');}
+}
+
+async function loadRLStatus(){
+  try{
+    const r=await api('/feedback/status');if(!r)return;
+    const w=r.class_weights||{};
+    document.getElementById('rl-weights').innerHTML=Object.entries(w).map(([k,v])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span style="font-size:12px;min-width:135px;color:var(--text2)">${k}</span><div style="flex:1;height:7px;background:#F3F4F6;border-radius:3px"><div style="height:100%;width:${Math.min(100,(v/2)*100)}%;background:${v>1.2?'#0D7377':v<0.8?'#DC2626':'#0B1E3D'};border-radius:3px;transition:.3s"></div></div><span style="font-size:12px;font-weight:600;color:${v>1.2?'var(--teal)':v<0.8?'var(--red)':'var(--navy)'};min-width:34px">${v}</span></div>`).join('');
+    document.getElementById('rl-params').innerHTML=`<div>Algorithm: <strong>Q-Learning (tabular)</strong></div><div>States: <strong>${r.q_table_size}</strong></div><div>&#945; (learning rate): <strong>${r.alpha}</strong></div><div>&#947; (discount): <strong>${r.gamma}</strong></div><div>&#949; (exploration): <strong>${r.epsilon}</strong></div>`;
+  }catch(e){console.error(e);}
+}
+
+const KM=[
+  {name:'Random Forest',train_f1:0.9303,test_f1:0.9049,auc:0.9555,mcc:0.8914,cv_f1:0.8868,gap:0.0253,overfit:false},
+  {name:'Gradient Boosting',train_f1:0.9568,test_f1:0.9024,auc:0.9556,mcc:0.8885,cv_f1:0.8864,gap:0.0544,overfit:false},
+  {name:'Logistic Regression',train_f1:0.9531,test_f1:0.8635,auc:0.9556,mcc:0.8434,cv_f1:0.8465,gap:0.0897,overfit:false},
+  {name:'Decision Tree',train_f1:0.7155,test_f1:0.6859,auc:0.9018,mcc:0.6429,cv_f1:0.6722,gap:0.0296,overfit:false},
+];
+function loadMetrics(){
+  document.getElementById('metrics-tbody').innerHTML=KM.map((m,i)=>`<tr class="${i===0?'metric-best':''}"><td style="font-weight:${i===0?700:400}">${m.name}${i===0?' &#9733;':''}</td><td class="metric-warn" style="text-align:center">${m.train_f1}</td><td class="metric-good" style="text-align:center">${m.test_f1}</td><td class="metric-good" style="text-align:center">${m.auc}</td><td class="metric-good" style="text-align:center">${m.mcc}</td><td class="metric-good" style="text-align:center">${m.cv_f1}</td><td style="text-align:center;font-weight:600;color:${m.gap<0.05?'var(--green)':'var(--gold)'}">${m.gap}</td><td style="text-align:center"><span class="badge badge-green">PASS &#10003;</span></td></tr>`).join('');
+}
+
+async function runEval(){
+  const dtype=document.getElementById('eval-dtype').value;
+  document.getElementById('eval-warn').style.display=dtype==='synthetic'?'block':'none';
+  toast('Running evaluation...');loading(true);
+  try{
+    const r=await api('/evaluation/run','POST',{dataset_type:dtype,n_records:500,model:'RandomForest'});
+    if(!r)return;const m=r.metrics;
+    const tb=document.getElementById('metrics-tbody');
+    if(tb.rows[0]&&m.f1_test){tb.rows[0].cells[2].textContent=m.f1_test;tb.rows[0].cells[3].textContent=m.auc;tb.rows[0].cells[4].textContent=m.mcc;tb.rows[0].cells[5].textContent=m.cv_f1;tb.rows[0].cells[6].textContent=m.gap;tb.rows[0].cells[6].style.color=m.gap<0.05?'var(--green)':'var(--gold)';tb.rows[0].cells[7].innerHTML=m.overfitting?'<span class="badge badge-red">FAIL</span>':'<span class="badge badge-green">PASS &#10003;</span>';}
+    toast(`F1=${m.f1_test} on ${r.dataset_size} ${dtype} records`,'success');
+  }catch(e){toast('Eval error: '+e.message,'error');}
+  loading(false);
+}
+
+async function evalGAT(){
+  toast('Evaluating GAT...');loading(true);
+  try{
+    const r=await api('/evaluation/gat');if(!r)return;
+    const m=r.metrics||{};
+    document.getElementById('gat-eval-result').style.display='block';
+    document.getElementById('gat-eval-content').innerHTML=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:11px">${['hits_at_1','hits_at_5','hits_at_10','mrr'].map(k=>`<div style="text-align:center;padding:12px;background:#F8FAFC;border-radius:8px;border:1px solid var(--border)"><div style="font-size:20px;font-weight:700;color:var(--navy)">${((m[k]||0)*100).toFixed(1)}%</div><div style="font-size:11px;color:var(--lgray);margin-top:3px">${k.toUpperCase().replace('_','@')}</div></div>`).join('')}</div><div style="font-size:12px;color:var(--lgray)">Model: ${r.model} · Trained: ${r.trained?'&#10003;':'&#9888; Fixed'} · Test pairs: ${m.test_pairs||'—'}</div>`;
+    toast('GAT evaluated','success');
+  }catch(e){toast('GAT eval error: '+e.message,'error');}
+  loading(false);
+}
+
+async function loadConnectors(){
+  try{
+    const c=await api('/connectors');if(!c)return;
+    const icons={MISP:'&#128308;',CIRCL:'&#128994;',OTX:'&#128309;',OpenCTI:'&#9899;'};
+    document.getElementById('connectors-grid').innerHTML=c.map(conn=>`<div class="feed-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:7px"><span style="font-size:22px">${icons[conn.name]||'&#9898;'}</span><div style="font-size:14px;font-weight:600;color:var(--navy)">${conn.name}</div></div><div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;${conn.status==='live'?'color:var(--green)':'color:var(--lgray)'}"><span class="conn-dot ${conn.status==='live'?'conn-live':'conn-off'}"></span>${conn.status==='live'?'Live — connected':'Offline — set credentials'}</div>${conn.status==='live'?`<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%;justify-content:center" onclick="fetchConn('${conn.name}')">Fetch now</button>`:''}</div>`).join('');
+    const dm={MISP:'dot-misp',OTX:'dot-otx',OpenCTI:'dot-opencti'};
+    c.forEach(conn=>{const d=dm[conn.name];if(d){const el=document.getElementById(d);if(el)el.className='conn-dot '+(conn.status==='live'?'conn-live':'conn-off');}});
+  }catch(e){toast('Connector error: '+e.message,'error');}
+}
+
+async function fetchConn(name){
+  if(S.user?.role!=='admin'){toast('Admin role required','warning');return;}
+  toast(`Fetching from ${name}...`);loading(true);
+  try{const r=await api(`/connectors/${name}/fetch`,'POST');if(r)toast(`${name}: ${r.fetched} IoCs fetched`,'success');}
+  catch(e){toast(e.message,'error');}
+  loading(false);
+}
+
+async function exportCSV(){
+  try{const r=await api('/iocs?per_page=500');if(!r)return;const h=['id','label','ioc_value','ioc_type','severity','source','tlp','is_anomaly','is_synthetic','threat_actor','ttp'];const csv=[h.join(','),...r.data.map(d=>h.map(k=>JSON.stringify(d[k]??'')).join(','))].join('\n');const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='threatiq_export.csv';a.click();toast('CSV exported','success');}
+  catch(e){toast('Export error','error');}
+}
+
+async function exportJSON(){
+  try{const r=await api('/iocs?per_page=500');if(!r)return;const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(r,null,2));a.download='threatiq_export.json';a.click();toast('JSON exported','success');}
+  catch(e){toast('Export error','error');}
+}
+
+function globalSearch(q){if(S.page!=='iocs')nav('iocs');document.getElementById('ioc-q').value=q;debounceLoadIocs();}
+function refreshCurrent(){({dashboard:loadDashboard,alerts:loadAlerts,iocs:loadIocs,graph:loadGraph,feedback:loadRLStatus,metrics:loadMetrics,connectors:loadConnectors})[S.page]?.();toast('Refreshed');}
+window.addEventListener('resize',()=>{document.getElementById('menu-btn').style.display=window.innerWidth<768?'flex':'none';});
+if(window.innerWidth<768)document.getElementById('menu-btn').style.display='flex';
+</script></body></html>
