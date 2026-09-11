@@ -31,6 +31,34 @@ async def get_graph(
         model_version="4.0.0-trained" if trainer.model.trained else "4.0.0-fixed",
     )
 
+@router.get("/navigator-layer", summary="Export GAT predictions as a MITRE ATT&CK Navigator layer")
+async def get_navigator_layer(
+    request: Request,
+    top_k: int = 15,
+    user: CurrentUser = Depends(get_current_user),
+    _rl=Depends(rate_limit(default_limiter)),
+):
+    """
+    Same GAT predictions as GET /graph, reshaped into a MITRE ATT&CK
+    Navigator layer file. Download the response body as a .json file and
+    open it directly at https://mitre-attack.github.io/attack-navigator/
+    (Open Existing Layer -> Upload from local) to see ThreatIQ's predicted
+    actor-technique associations as a heatmap on the real ATT&CK matrix.
+    """
+    from app.ml.gat import GATTrainer
+    from app.services.attck_navigator import build_navigator_layer
+    from app.core.config import settings
+
+    trainer = GATTrainer(settings.MITRE_ATTACK_DATA_PATH)
+    trainer.load("./model_artifacts/gat_weights.npz")
+    rels = trainer.load_mitre_relationships()
+    nodes, edges = trainer.build_graph(rels)
+    preds = trainer.model.predict_links(nodes, edges, top_k=top_k)
+    layer = build_navigator_layer(nodes, preds)
+    audit_log.log(user.user_id, user.tenant_id, "get_navigator_layer", "graph", details={"top_k": top_k})
+    return layer
+
+
 @router.post("/train", summary="Retrain GAT (admin only)")
 async def retrain_gat(
     request: Request,

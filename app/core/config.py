@@ -71,8 +71,26 @@ class Settings(BaseSettings):
 
     # -- OTX (AlienVault) connector -- replaces FS-ISAC --------------------
     # Free key, no membership gate: https://otx.alienvault.com/api
-    OTX_API_KEY: Optional[str] = "d82f8d639f6ece466e1501be55410b3481cfe3a976eb057707d41915d390d631"
+    # SECURITY: never hardcode a real key as a default here -- a prior
+    # version of this file shipped a live-looking key as the default value,
+    # which meant it was committed to git and copied into every clone.
+    # Leave this None; the connector's offline-fallback path handles an
+    # absent key gracefully (see OTXConnector.__init__).
+    OTX_API_KEY: Optional[str] = None
     OTX_API_URL: str = "https://otx.alienvault.com/api/v1"
+
+    # -- Wazuh SIEM connector (pull alerts in) + MISP export (push out) ----
+    # Pull direction: WazuhConnector queries the Wazuh indexer (OpenSearch-
+    # compatible API) for recent high-severity alerts, treating them as
+    # another CTI source alongside MISP/CIRCL/OTX.
+    WAZUH_INDEXER_URL: Optional[str] = None
+    WAZUH_API_USERNAME: Optional[str] = None
+    WAZUH_API_PASSWORD: Optional[str] = None
+    WAZUH_VERIFY_SSL: bool = True
+    # Push direction reuses MISP_URL / MISP_API_KEY above -- MISPExporter
+    # publishes ThreatIQ's own high-confidence IoCs to the same MISP
+    # instance, which Wazuh's own MISP integration module then polls to
+    # auto-generate detection rules, closing the loop.
 
     # -- OpenCTI connector -----------------------------------------------
     OPENCTI_URL: Optional[str] = None

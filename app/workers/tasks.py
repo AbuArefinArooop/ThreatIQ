@@ -50,6 +50,22 @@ def ingest_otx(self, limit: int = 200):
         raise self.retry(exc=exc, countdown=600)
 
 
+@celery_app.task(bind=True, name="app.workers.tasks.ingest_wazuh", max_retries=3)
+def ingest_wazuh(self, limit: int = 200):
+    """Ingest recent high-severity Wazuh SIEM alerts."""
+    try:
+        from app.connectors.wazuh_connector import WazuhConnector
+        from app.core.config import settings
+        c = WazuhConnector(settings.WAZUH_INDEXER_URL, settings.WAZUH_API_USERNAME,
+                            settings.WAZUH_API_PASSWORD, settings.WAZUH_VERIFY_SSL)
+        iocs = c.fetch_recent(limit=limit)
+        logger.info("Wazuh ingest: %d alerts fetched", len(iocs))
+        return {"source": "Wazuh SIEM", "count": len(iocs)}
+    except Exception as exc:
+        logger.error("Wazuh ingest failed: %s", exc)
+        raise self.retry(exc=exc, countdown=120)
+
+
 @celery_app.task(name="app.workers.tasks.retrain_gat")
 def retrain_gat(epochs: int = 200):
     """Weekly GAT retraining on accumulated MITRE ATT&CK ground truth."""

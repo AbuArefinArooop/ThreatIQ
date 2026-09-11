@@ -1,0 +1,127 @@
+# docker-compose.wazuh.yml
+# Overlay adding a single-node Wazuh stack for the ThreatIQ <-> SIEM demo.
+#
+# Usage (from the project root, alongside the existing docker-compose.yml):
+#   docker compose -f docker-compose.yml -f docker-compose.wazuh.yml up -d
+#
+# Wazuh needs its own certs/config volumes generated once via the official
+# wazuh-docker quick-start generator before first run:
+#   git clone https://github.com/wazuh/wazuh-docker.git -b v4.9.0
+#   cd wazuh-docker/single-node && docker compose -f generate-indexer-certs.yml run --rm generator
+# Then copy the generated ./config and ./certs directories next to this file,
+# or point the volumes below at that path.
+#
+# This overlay assumes ThreatIQ's main docker-compose.yml already defines the
+# default network (created implicitly as "<project>_default"). Wazuh containers
+# join that network so the wazuh_connector inside the ThreatIQ api/worker
+# containers can reach the manager's API, and so MISP export traffic can be
+# ingested by Wazuh's MISP integration module.
+
+services:
+  wazuh.manager:
+    image: wazuh/wazuh-manager:4.9.0
+    hostname: wazuh.manager
+    restart: unless-stopped
+    ports:
+      - "1514:1514"       # agent event traffic
+      - "1515:1515"       # agent enrollment
+      - "514:514/udp"     # syslog
+      - "55000:55000"     # Wazuh REST API (used by wazuh_connector.py)
+    environment:
+      - INDEXER_URL=https://wazuh.indexer:9200
+      - INDEXER_USERNAME=admin
+      - INDEXER_PASSWORD=${WAZUH_INDEXER_PASSWORD:-SecretPassword1!}
+      - FILEBEAT_SSL_VERIFICATION_MODE=none
+      - SSL_CERTIFICATE_AUTHORITIES=/etc/ssl/root-ca.pem
+      - SSL_CERTIFICATE=/etc/ssl/filebeat.pem
+      - SSL_KEY=/etc/ssl/filebeat.key
+      - API_USERNAME=${WAZUH_API_USERNAME:-wazuh-wui}
+      - API_PASSWORD=${WAZUH_API_PASSWORD:-SecretPassword1!}
+    volumes:
+      - wazuh_api_configuration:/var/ossec/api/configuration
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+      - wazuh_var_multigroups:/var/ossec/var/multigroups
+      - wazuh_integrations:/var/ossec/integrations
+      - wazuh_active_response:/var/ossec/active-response/bin
+      - wazuh_agentless:/var/ossec/agentless
+      - wazuh_wodles:/var/ossec/wodles
+      - filebeat_etc:/etc/filebeat
+      - filebeat_var:/var/lib/filebeat
+      - ./wazuh-config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
+      - ./wazuh-config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem
+      - ./wazuh-config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key
+      # Custom MISP integration script (pulls ThreatIQ-exported events from MISP)
+      - ./wazuh-config/integrations/custom-misp.py:/var/ossec/integrations/custom-misp.py
+      - ./wazuh-config/ossec-misp.conf:/var/ossec/etc/ossec-misp-fragment.conf:ro
+    networks:
+      - default
+
+  wazuh.indexer:
+    image: wazuh/wazuh-indexer:4.9.0
+    hostname: wazuh.indexer
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+      - ./wazuh-config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem
+      - ./wazuh-config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.key
+      - ./wazuh-config/wazuh_indexer_ssl_certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.pem
+      - ./wazuh-config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem
+      - ./wazuh-config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem
+      - ./wazuh-config/wazuh_indexer_config/wazuh.indexer.yml:/usr/share/wazuh-indexer/opensearch.yml
+      - ./wazuh-config/internal_users.yml:/usr/share/wazuh-indexer/opensearch-security/internal_users.yml
+    networks:
+      - default
+
+  wazuh.dashboard:
+    image: wazuh/wazuh-dashboard:4.9.0
+    hostname: wazuh.dashboard
+    restart: unless-stopped
+    ports:
+      - "8443:5601"
+    environment:
+      - WAZUH_API_URL=https://wazuh.manager
+      - DASHBOARD_USERNAME=${WAZUH_API_USERNAME:-wazuh-wui}
+      - DASHBOARD_PASSWORD=${WAZUH_API_PASSWORD:-SecretPassword1!}
+      - API_USERNAME=${WAZUH_API_USERNAME:-wazuh-wui}
+      - API_PASSWORD=${WAZUH_API_PASSWORD:-SecretPassword1!}
+    volumes:
+      - ./wazuh-config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem
+      - ./wazuh-config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem
+      - ./wazuh-config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem
+      - ./wazuh-config/wazuh_dashboard_config/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/opt/wazuh-dashboard/config/opensearch_dashboards.yml
+    depends_on:
+      - wazuh.indexer
+    networks:
+      - default
+
+volumes:
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  wazuh-indexer-data:
+
+networks:
+  default:
+    external: true
+    name: threatiq_default

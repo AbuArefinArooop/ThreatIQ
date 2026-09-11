@@ -13,7 +13,7 @@ class EvalRequest(BaseModel):
     @field_validator("dataset_type")
     @classmethod
     def validate_dtype(cls, v):
-        allowed = {"synthetic","real_misp","real_circl","real_otx","mixed"}
+        allowed = {"synthetic","real_misp","real_circl","real_otx","real_wazuh","mixed"}
         if v not in allowed:
             raise ValueError(f"dataset_type must be one of: {allowed}")
         return v
@@ -65,6 +65,11 @@ async def run_evaluation(
         from app.connectors.otx_connector import OTXConnector
         from app.core.config import settings
         iocs = OTXConnector(settings.OTX_API_KEY, settings.OTX_API_URL).fetch_recent(limit=req.n_records)
+    elif req.dataset_type == "real_wazuh":
+        from app.connectors.wazuh_connector import WazuhConnector
+        from app.core.config import settings
+        iocs = WazuhConnector(settings.WAZUH_INDEXER_URL, settings.WAZUH_API_USERNAME,
+            settings.WAZUH_API_PASSWORD, settings.WAZUH_VERIFY_SSL).fetch_recent(limit=req.n_records)
     else:
         from app.core.synthetic_data import generate_synthetic_iocs
         from app.connectors.misp_connector import MISPConnector

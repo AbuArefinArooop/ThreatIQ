@@ -40,12 +40,11 @@ CREDENTIALS = [
     ("viewer", "ThreatIQ@Viewer25!", 4),
 ]
 
-# Only these three are wired into POST /connectors/{name}/fetch's dispatch
-# (app/api/v1/connectors.py); name must be uppercase, matching
-# ^[A-Z0-9_-]{2,20}$.
-CONNECTOR_NAMES = ["MISP", "CIRCL", "OTX"]
+# Wired into POST /connectors/{name}/fetch's dispatch (app/api/v1/connectors.py);
+# name must be uppercase, matching ^[A-Z0-9_-]{2,20}$.
+CONNECTOR_NAMES = ["MISP", "CIRCL", "OTX", "WAZUH"]
 
-EVAL_DATASET_TYPES = ["synthetic", "real_misp", "real_circl", "real_otx", "mixed"]
+EVAL_DATASET_TYPES = ["synthetic", "real_misp", "real_circl", "real_otx", "real_wazuh", "mixed"]
 
 IOC_CLASSES = [
     "Malware", "Phishing", "Ransomware", "DDoS", "APT",

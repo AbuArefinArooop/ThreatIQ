@@ -16,7 +16,7 @@ _state: dict = {"status":"idle","results":{},"log":[]}
 
 class PipelineRequest(BaseModel):
     n_records: int = 2000
-    sources: list[str] = ["MISP","CIRCL","OTX","Synthetic"]
+    sources: list[str] = ["MISP","CIRCL","OTX","WAZUH","Synthetic"]
     run_gat_training: bool = True
     gat_epochs: int = 100
 
@@ -30,7 +30,7 @@ class PipelineRequest(BaseModel):
     @field_validator("sources")
     @classmethod
     def validate_sources(cls, v):
-        allowed = {"MISP","CIRCL","OTX","Synthetic","VirusTotal"}
+        allowed = {"MISP","CIRCL","OTX","WAZUH","Synthetic","VirusTotal"}
         invalid = [s for s in v if s not in allowed]
         if invalid:
             raise ValueError(f"Unknown sources: {invalid}")
@@ -77,6 +77,7 @@ async def _run_task(req: PipelineRequest):
         from app.connectors.misp_connector import MISPConnector
         from app.connectors.circl_connector import CIRCLConnector
         from app.connectors.otx_connector import OTXConnector
+        from app.connectors.wazuh_connector import WazuhConnector
         from app.core.config import settings
         from app.core.synthetic_data import generate_synthetic_iocs
         import numpy as np
@@ -102,6 +103,10 @@ async def _run_task(req: PipelineRequest):
         if "OTX" in req.sources:
             iocs = OTXConnector(settings.OTX_API_KEY,settings.OTX_API_URL).fetch_recent(limit=100)
             all_real.extend(iocs); log.append(f"  OTX: {len(iocs)} IoCs")
+        if "WAZUH" in req.sources:
+            iocs = WazuhConnector(settings.WAZUH_INDEXER_URL,settings.WAZUH_API_USERNAME,
+                settings.WAZUH_API_PASSWORD,settings.WAZUH_VERIFY_SSL).fetch_recent(limit=100)
+            all_real.extend(iocs); log.append(f"  WAZUH: {len(iocs)} alerts")
 
         real_n = len(all_real)
         synthetic = generate_synthetic_iocs(n=max(200,req.n_records-real_n)) if "Synthetic" in req.sources else []

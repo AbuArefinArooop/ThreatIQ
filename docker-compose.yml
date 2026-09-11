@@ -53,6 +53,10 @@ services:
       - CIRCL_PASSWORD=${CIRCL_PASSWORD:-}
       - OTX_API_KEY=${OTX_API_KEY:-}
       - OTX_API_URL=${OTX_API_URL:-https://otx.alienvault.com/api/v1}
+      - WAZUH_INDEXER_URL=${WAZUH_INDEXER_URL:-}
+      - WAZUH_API_USERNAME=${WAZUH_API_USERNAME:-}
+      - WAZUH_API_PASSWORD=${WAZUH_API_PASSWORD:-}
+      - WAZUH_VERIFY_SSL=${WAZUH_VERIFY_SSL:-true}
       - OPENCTI_URL=${OPENCTI_URL:-}
       - OPENCTI_TOKEN=${OPENCTI_TOKEN:-}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-prod}
@@ -85,6 +89,10 @@ services:
       - CIRCL_PASSWORD=${CIRCL_PASSWORD:-}
       - OTX_API_KEY=${OTX_API_KEY:-}
       - OTX_API_URL=${OTX_API_URL:-https://otx.alienvault.com/api/v1}
+      - WAZUH_INDEXER_URL=${WAZUH_INDEXER_URL:-}
+      - WAZUH_API_USERNAME=${WAZUH_API_USERNAME:-}
+      - WAZUH_API_PASSWORD=${WAZUH_API_PASSWORD:-}
+      - WAZUH_VERIFY_SSL=${WAZUH_VERIFY_SSL:-true}
       - OPENCTI_URL=${OPENCTI_URL:-}
       - OPENCTI_TOKEN=${OPENCTI_TOKEN:-}
     depends_on:
@@ -108,3 +116,7 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  default:
+    name: threatiq_default

@@ -282,6 +282,433 @@ class TestOTXConnector:
         assert all(r["is_synthetic"] is False for r in iocs)
 
 
+class TestWazuhConnector:
+    def test_offline_returns_data(self):
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector()
+        iocs = c.fetch_recent()
+        assert len(iocs) > 0
+
+    def test_offline_not_synthetic(self):
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector()
+        iocs = c.fetch_recent()
+        assert all(r["is_synthetic"] is False for r in iocs)
+
+    def test_offline_source_is_wazuh(self):
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector()
+        iocs = c.fetch_recent()
+        assert all(r["source"] == "Wazuh SIEM" for r in iocs)
+
+    def test_offline_respects_limit(self):
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector()
+        iocs = c.fetch_recent(limit=2)
+        assert len(iocs) <= 2
+
+    def test_no_credentials_is_offline_mode(self):
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector()
+        assert c._live is False
+
+    def test_credentials_present_is_live_mode(self):
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector(indexer_url="https://wazuh.indexer:9200", username="admin", password="secret")
+        assert c._live is True
+
+    def test_ioc_shape_matches_other_connectors(self):
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector()
+        ioc = c.fetch_recent()[0]
+        for field in ("external_id", "text", "label", "severity", "severity_label",
+                      "confidence", "source", "source_trust", "ioc_value", "ioc_type",
+                      "tlp", "is_synthetic", "raw_payload"):
+            assert field in ioc, f"missing field: {field}"
+
+    def test_live_fetch_falls_back_on_error(self):
+        """Unreachable indexer should degrade to the offline sample rather
+        than raising, matching every other connector's fallback contract."""
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector(indexer_url="https://localhost:1", username="admin", password="wrong", verify_ssl=False)
+        iocs = c.fetch_recent(limit=5)
+        assert len(iocs) > 0
+        assert all(r["is_synthetic"] is False for r in iocs)
+
+    def test_all_alerts_meet_minimum_rule_level_semantics(self):
+        """Every offline sample should map to a severity ThreatIQ actually
+        uses (1-5), since these feed straight into the classifier."""
+        from app.connectors.wazuh_connector import WazuhConnector
+        c = WazuhConnector()
+        for ioc in c.fetch_recent():
+            assert 1 <= ioc["severity"] <= 5
+
+
+class TestMISPExporter:
+    def _sample_records(self):
+        return [
+            {"ioc_value": "203.0.113.9", "ioc_type": "IPv4 Address", "label": "APT",
+             "severity": 5, "severity_label": "Critical", "confidence": 0.92,
+             "source": "Wazuh SIEM", "is_synthetic": False},
+            {"ioc_value": "low-conf.example", "ioc_type": "Domain Name", "label": "Malware",
+             "severity": 2, "severity_label": "Low", "confidence": 0.40,
+             "source": "OTX AlienVault", "is_synthetic": False},
+            {"ioc_value": "training-only.example", "ioc_type": "Domain Name", "label": "Malware",
+             "severity": 5, "severity_label": "Critical", "confidence": 0.95,
+             "source": "Synthetic", "is_synthetic": True},
+        ]
+
+    def test_not_configured_is_not_live(self):
+        from app.connectors.misp_export import MISPExporter
+        exporter = MISPExporter()
+        assert exporter._live is False
+
+    def test_select_candidates_filters_low_confidence(self):
+        from app.connectors.misp_export import MISPExporter
+        exporter = MISPExporter()
+        candidates = exporter.select_candidates(self._sample_records())
+        values = {c["ioc_value"] for c in candidates}
+        assert "low-conf.example" not in values
+
+    def test_select_candidates_excludes_synthetic(self):
+        from app.connectors.misp_export import MISPExporter
+        exporter = MISPExporter()
+        candidates = exporter.select_candidates(self._sample_records())
+        values = {c["ioc_value"] for c in candidates}
+        assert "training-only.example" not in values
+
+    def test_select_candidates_keeps_qualifying_record(self):
+        from app.connectors.misp_export import MISPExporter
+        exporter = MISPExporter()
+        candidates = exporter.select_candidates(self._sample_records())
+        values = {c["ioc_value"] for c in candidates}
+        assert "203.0.113.9" in values
+
+    def test_publish_skips_gracefully_without_misp_configured(self):
+        """Publishing with no MISP_URL/MISP_API_KEY configured must not
+        raise -- it should report a clear skip reason instead, matching
+        every pull connector's offline-graceful-degradation contract."""
+        from app.connectors.misp_export import MISPExporter
+        exporter = MISPExporter()
+        result = exporter.publish_iocs(self._sample_records())
+        assert result["skipped"] == "misp_not_configured"
+        assert result["attributes_published"] == 0
+
+    def test_publish_reports_no_candidates_distinctly(self):
+        from app.connectors.misp_export import MISPExporter
+        exporter = MISPExporter()
+        result = exporter.publish_iocs([r for r in self._sample_records() if r["is_synthetic"]])
+        assert result["skipped"] == "no_candidates"
+
+    def test_accepts_pydantic_style_field_names(self):
+        """The exporter must also work against app.api.v1.iocs's
+        IoCResponse shape (label_confidence, not confidence)."""
+        from app.connectors.misp_export import MISPExporter
+
+        class FakeIoCResponse:
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+
+        record = FakeIoCResponse(
+            ioc_value="1.2.3.4", ioc_type="IPv4 Address", label="APT",
+            severity=5, severity_label="Critical", label_confidence=0.9,
+            source="MISP", is_synthetic=False,
+        )
+        exporter = MISPExporter()
+        candidates = exporter.select_candidates([record])
+        assert len(candidates) == 1
+
+    def test_max_threat_level_maps_severity_inversely(self):
+        """MISP's threat_level_id is 1=High...4=Undefined -- the inverse
+        direction of ThreatIQ's own 1-5 severity scale."""
+        from app.connectors.misp_export import MISPExporter
+        assert MISPExporter._max_threat_level([{"severity": 5}]) == 1
+        assert MISPExporter._max_threat_level([{"severity": 3}]) == 2
+        assert MISPExporter._max_threat_level([{"severity": 1}]) == 3
+
+
+class TestSTIXExport:
+    def _sample_records(self):
+        return [
+            {"ioc_value": "203.0.113.9", "ioc_type": "IPv4 Address", "label": "APT", "text": "C2 beacon",
+             "severity": 5, "severity_label": "Critical", "confidence": 0.92,
+             "source": "Wazuh SIEM", "tlp": "TLP:AMBER", "is_synthetic": False},
+            {"ioc_value": "CVE-2024-12345", "ioc_type": "CVE Identifier", "label": "Vulnerability",
+             "text": "Remote code execution", "severity": 5, "severity_label": "Critical",
+             "confidence": 0.99, "source": "CIRCL", "tlp": "TLP:WHITE", "is_synthetic": False},
+            {"ioc_value": "some-host-03", "ioc_type": "Host", "label": "Malware", "text": "compromised host",
+             "severity": 4, "severity_label": "High", "confidence": 0.8,
+             "source": "Wazuh SIEM", "tlp": "TLP:AMBER", "is_synthetic": False},
+            {"ioc_value": "training-only.example", "ioc_type": "Domain Name", "label": "Malware",
+             "text": "synthetic training sample", "severity": 5, "severity_label": "Critical",
+             "confidence": 0.95, "source": "Synthetic", "tlp": "TLP:AMBER", "is_synthetic": True},
+        ]
+
+    def test_bundle_has_correct_envelope(self):
+        from app.services.stix_export import build_ioc_bundle
+        bundle = build_ioc_bundle(self._sample_records())
+        assert bundle["type"] == "bundle"
+        assert bundle["id"].startswith("bundle--")
+        assert isinstance(bundle["objects"], list)
+
+    def test_ipv4_produces_valid_indicator_pattern(self):
+        from app.services.stix_export import build_ioc_bundle
+        bundle = build_ioc_bundle([self._sample_records()[0]])
+        indicators = [o for o in bundle["objects"] if o["type"] == "indicator"]
+        assert len(indicators) == 1
+        assert indicators[0]["pattern"] == "[ipv4-addr:value = '203.0.113.9']"
+        assert indicators[0]["spec_version"] == "2.1"
+
+    def test_confidence_is_0_to_100_integer_per_spec(self):
+        from app.services.stix_export import build_ioc_bundle
+        bundle = build_ioc_bundle([self._sample_records()[0]])
+        indicator = next(o for o in bundle["objects"] if o["type"] == "indicator")
+        assert indicator["confidence"] == 92
+        assert isinstance(indicator["confidence"], int)
+
+    def test_cve_produces_vulnerability_sdo_not_indicator(self):
+        from app.services.stix_export import build_ioc_bundle
+        bundle = build_ioc_bundle([self._sample_records()[1]])
+        types = {o["type"] for o in bundle["objects"]}
+        assert "vulnerability" in types
+        assert "indicator" not in types
+
+    def test_unmapped_type_produces_note_only(self):
+        """A bare 'Host' has no dedicated STIX Cyber Observable type --
+        must not fabricate one; should be Note-only."""
+        from app.services.stix_export import build_ioc_bundle
+        bundle = build_ioc_bundle([self._sample_records()[2]])
+        types = {o["type"] for o in bundle["objects"]}
+        assert types == {"note"}
+
+    def test_synthetic_excluded_by_default(self):
+        from app.services.stix_export import build_ioc_bundle
+        bundle = build_ioc_bundle(self._sample_records(), exclude_synthetic=True)
+        values_seen = str(bundle["objects"])
+        assert "training-only.example" not in values_seen
+
+    def test_synthetic_included_when_requested(self):
+        from app.services.stix_export import build_ioc_bundle
+        bundle = build_ioc_bundle(self._sample_records(), exclude_synthetic=False)
+        values_seen = str(bundle["objects"])
+        assert "training-only.example" in values_seen
+
+    def test_tlp_marking_ref_matches_shared_map(self):
+        from app.services.stix_export import build_ioc_bundle
+        from app.connectors.opencti_connector import STIX_TLP_MAP
+        bundle = build_ioc_bundle([self._sample_records()[0]])
+        indicator = next(o for o in bundle["objects"] if o["type"] == "indicator")
+        assert indicator["object_marking_refs"] == [STIX_TLP_MAP["TLP:AMBER"]]
+
+    def test_indicator_id_is_deterministic(self):
+        """Re-exporting the same IoC value must yield the same indicator
+        ID (idempotent republication), not a fresh random UUID."""
+        from app.services.stix_export import build_ioc_bundle
+        b1 = build_ioc_bundle([self._sample_records()[0]])
+        b2 = build_ioc_bundle([self._sample_records()[0]])
+        id1 = next(o["id"] for o in b1["objects"] if o["type"] == "indicator")
+        id2 = next(o["id"] for o in b2["objects"] if o["type"] == "indicator")
+        assert id1 == id2
+
+    def test_accepts_pydantic_style_field_names(self):
+        from app.services.stix_export import build_ioc_bundle
+
+        class FakeIoCResponse:
+            def __init__(self, **kw):
+                self.__dict__.update(kw)
+
+        record = FakeIoCResponse(
+            ioc_value="1.2.3.4", ioc_type="IPv4 Address", label="APT", text="x",
+            severity=5, severity_label="Critical", label_confidence=0.77,
+            source="MISP", tlp="TLP:RED", is_synthetic=False,
+        )
+        bundle = build_ioc_bundle([record])
+        indicator = next(o for o in bundle["objects"] if o["type"] == "indicator")
+        assert indicator["confidence"] == 77
+
+
+class TestAttackNavigatorExport:
+    def _sample_nodes(self):
+        return [
+            {"key": "APT29", "type": "actor", "id": "G0016"},
+            {"key": "APT28", "type": "actor", "id": "G0007"},
+            {"key": "Spearphishing Attachment", "type": "ttp", "id": "T1566.001"},
+            {"key": "Process Injection", "type": "ttp", "id": "T1055"},
+        ]
+
+    def _sample_predictions(self):
+        return [
+            {"source": "APT29", "target": "Spearphishing Attachment", "score": 0.85, "relation": "predicted_uses"},
+            {"source": "APT28", "target": "Spearphishing Attachment", "score": 0.65, "relation": "predicted_uses"},
+            {"source": "APT29", "target": "Process Injection", "score": 0.40, "relation": "predicted_uses"},
+        ]
+
+    def test_layer_has_required_top_level_fields(self):
+        from app.services.attck_navigator import build_navigator_layer
+        layer = build_navigator_layer(self._sample_nodes(), self._sample_predictions())
+        for field in ("name", "versions", "domain", "techniques", "gradient"):
+            assert field in layer
+        assert layer["domain"] == "enterprise-attack"
+
+    def test_technique_ids_resolved_from_node_names(self):
+        """predict_links() returns node *names*; the layer must contain
+        real MITRE technique IDs, not the display name."""
+        from app.services.attck_navigator import build_navigator_layer
+        layer = build_navigator_layer(self._sample_nodes(), self._sample_predictions())
+        ids = {t["techniqueID"] for t in layer["techniques"]}
+        assert ids == {"T1566.001", "T1055"}
+
+    def test_score_is_max_across_predicting_actors(self):
+        """Spearphishing Attachment is predicted by both APT29 (85) and
+        APT28 (65) -- the layer score should be the max, not summed or
+        averaged, so a strong single prediction isn't diluted."""
+        from app.services.attck_navigator import build_navigator_layer
+        layer = build_navigator_layer(self._sample_nodes(), self._sample_predictions())
+        spearphish = next(t for t in layer["techniques"] if t["techniqueID"] == "T1566.001")
+        assert spearphish["score"] == 85.0
+
+    def test_comment_lists_all_contributing_actors(self):
+        from app.services.attck_navigator import build_navigator_layer
+        layer = build_navigator_layer(self._sample_nodes(), self._sample_predictions())
+        spearphish = next(t for t in layer["techniques"] if t["techniqueID"] == "T1566.001")
+        assert "APT29" in spearphish["comment"] and "APT28" in spearphish["comment"]
+
+    def test_empty_predictions_produce_empty_but_valid_layer(self):
+        from app.services.attck_navigator import build_navigator_layer
+        layer = build_navigator_layer(self._sample_nodes(), [])
+        assert layer["techniques"] == []
+        assert layer["domain"] == "enterprise-attack"
+
+    def test_techniques_sorted_by_score_descending(self):
+        from app.services.attck_navigator import build_navigator_layer
+        layer = build_navigator_layer(self._sample_nodes(), self._sample_predictions())
+        scores = [t["score"] for t in layer["techniques"]]
+        assert scores == sorted(scores, reverse=True)
+
+
+class TestCorrelation:
+    def _multi_source_group(self):
+        """Same IP seen in an OTX pulse, a MISP event, and a Wazuh alert
+        -- three independent sources reporting the same observable."""
+        return [
+            {"ioc_value": "203.0.113.9", "ioc_type": "IPv4 Address", "text": "C2 server",
+             "label": "APT", "severity": 4, "severity_label": "High", "confidence": 0.60,
+             "source": "OTX AlienVault", "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+            {"ioc_value": "203.0.113.9", "ioc_type": "IPv4 Address", "text": "Known C2 infrastructure",
+             "label": "APT", "severity": 5, "severity_label": "Critical", "confidence": 0.55,
+             "source": "MISP", "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+            {"ioc_value": "203.0.113.9", "ioc_type": "IPv4 Address", "text": "Outbound C2 beacon",
+             "label": "APT", "severity": 5, "severity_label": "Critical", "confidence": 0.70,
+             "source": "Wazuh SIEM", "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+        ]
+
+    def _single_source_record(self):
+        return [{"ioc_value": "198.51.100.42", "ioc_type": "IPv4 Address", "text": "isolated report",
+                  "label": "Malware", "severity": 2, "severity_label": "Low", "confidence": 0.5,
+                  "source": "CIRCL", "tlp": "TLP:WHITE", "is_synthetic": False, "raw_payload": {}}]
+
+    def test_single_source_passes_through_unboosted(self):
+        from app.services.correlation import correlate_iocs
+        result = correlate_iocs(self._single_source_record())
+        assert len(result) == 1
+        assert result[0]["source_count"] == 1
+        assert result[0]["correlation_boost"] == 0.0
+        assert result[0]["confidence"] == 0.5
+
+    def test_multi_source_merges_into_one_record(self):
+        from app.services.correlation import correlate_iocs
+        result = correlate_iocs(self._multi_source_group())
+        assert len(result) == 1
+        assert result[0]["ioc_value"] == "203.0.113.9"
+        assert result[0]["source_count"] == 3
+
+    def test_multi_source_boosts_confidence_above_max_individual(self):
+        """The correlated confidence must exceed the highest individual
+        source's confidence (0.70) -- corroboration is itself evidence,
+        not just a tiebreaker among the inputs."""
+        from app.services.correlation import correlate_iocs
+        result = correlate_iocs(self._multi_source_group())
+        assert result[0]["confidence"] > 0.70
+
+    def test_confidence_never_exceeds_one(self):
+        from app.services.correlation import correlate_iocs
+        records = [
+            {"ioc_value": "x", "ioc_type": "Domain Name", "text": "t", "label": "L",
+             "severity": 5, "severity_label": "Critical", "confidence": 0.98,
+             "source": f"source-{i}", "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}}
+            for i in range(6)
+        ]
+        result = correlate_iocs(records)
+        assert result[0]["confidence"] <= 1.0
+
+    def test_severity_takes_the_maximum_across_group(self):
+        from app.services.correlation import correlate_iocs
+        result = correlate_iocs(self._multi_source_group())
+        assert result[0]["severity"] == 5
+
+    def test_all_sources_listed_in_corroborating_sources(self):
+        from app.services.correlation import correlate_iocs
+        result = correlate_iocs(self._multi_source_group())
+        assert set(result[0]["corroborating_sources"]) == {"OTX AlienVault", "MISP", "Wazuh SIEM"}
+
+    def test_domain_matching_is_case_insensitive(self):
+        """RFC 1035: domain names are case-insensitive -- EXAMPLE.COM and
+        example.com from two different feeds must correlate as the same
+        observable, not two separate ones."""
+        from app.services.correlation import correlate_iocs
+        records = [
+            {"ioc_value": "EXAMPLE.COM", "ioc_type": "Domain Name", "text": "t1", "label": "Malware",
+             "severity": 3, "severity_label": "Medium", "confidence": 0.5, "source": "OTX AlienVault",
+             "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+            {"ioc_value": "example.com", "ioc_type": "Domain Name", "text": "t2", "label": "Malware",
+             "severity": 3, "severity_label": "Medium", "confidence": 0.5, "source": "MISP",
+             "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+        ]
+        result = correlate_iocs(records)
+        assert len(result) == 1
+        assert result[0]["source_count"] == 2
+
+    def test_different_ioc_types_do_not_correlate_on_same_string(self):
+        """A hash value that happens to equal a domain-looking string
+        must not be treated as the same observable -- correlation keys on
+        (value, type), not value alone."""
+        from app.services.correlation import correlate_iocs
+        records = [
+            {"ioc_value": "abc123", "ioc_type": "File Hash (MD5)", "text": "t1", "label": "Malware",
+             "severity": 3, "severity_label": "Medium", "confidence": 0.5, "source": "OTX AlienVault",
+             "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+            {"ioc_value": "abc123", "ioc_type": "Domain Name", "text": "t2", "label": "Malware",
+             "severity": 3, "severity_label": "Medium", "confidence": 0.5, "source": "MISP",
+             "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+        ]
+        result = correlate_iocs(records)
+        assert len(result) == 2
+
+    def test_results_sorted_most_corroborated_first(self):
+        from app.services.correlation import correlate_iocs
+        result = correlate_iocs(self._multi_source_group() + self._single_source_record())
+        assert result[0]["source_count"] >= result[-1]["source_count"]
+
+    def test_is_synthetic_true_only_if_all_corroborating_records_are_synthetic(self):
+        """A real IoC independently confirmed by a synthetic training
+        record shouldn't get mislabeled as fully synthetic."""
+        from app.services.correlation import correlate_iocs
+        records = [
+            {"ioc_value": "1.2.3.4", "ioc_type": "IPv4 Address", "text": "t1", "label": "Malware",
+             "severity": 3, "severity_label": "Medium", "confidence": 0.5, "source": "Synthetic",
+             "tlp": "TLP:AMBER", "is_synthetic": True, "raw_payload": {}},
+            {"ioc_value": "1.2.3.4", "ioc_type": "IPv4 Address", "text": "t2", "label": "Malware",
+             "severity": 3, "severity_label": "Medium", "confidence": 0.5, "source": "OTX AlienVault",
+             "tlp": "TLP:AMBER", "is_synthetic": False, "raw_payload": {}},
+        ]
+        result = correlate_iocs(records)
+        assert result[0]["is_synthetic"] is False
+
+    def test_empty_input_returns_empty_list(self):
+        from app.services.correlation import correlate_iocs
+        assert correlate_iocs([]) == []
+
+
 # ── Unit: Trained GAT ─────────────────────────────────────────
 class TestGAT:
     def test_numpy_gat_initialises(self):

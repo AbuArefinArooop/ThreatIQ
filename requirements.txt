@@ -22,9 +22,12 @@ scikit-learn==1.5.2
 numpy==1.26.4
 pandas==2.2.3
 networkx==3.4.2
-torch==2.5.1
-torch-geometric==2.6.1
 imbalanced-learn==0.12.4
+# NOTE: torch / torch-geometric intentionally NOT listed here. The GAT
+# implementation (app/ml/gat.py) is pure NumPy by design -- neither package
+# is imported anywhere in this codebase (verified: `grep -rn "^import torch\|^from torch" app/`
+# returns nothing). Keeping them out of requirements.txt avoids roughly
+# tripling the Docker image size for a dependency that isn't used.
 
 # ── HTTP clients for CTI feeds ────────────────────────
 httpx==0.28.1

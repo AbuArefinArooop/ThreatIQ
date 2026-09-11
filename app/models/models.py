@@ -30,6 +30,7 @@ class IoCSourceType(str, enum.Enum):
     MISP = "MISP"
     CIRCL = "CIRCL"
     SIEM = "Internal SIEM"
+    WAZUH = "Wazuh SIEM"
     VIRUSTOTAL = "VirusTotal"
     SHODAN = "Shodan"
     OTX = "OTX AlienVault"

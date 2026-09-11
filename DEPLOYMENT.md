@@ -139,12 +139,11 @@ pip install -r requirements.txt
 pytest tests/ -v
 ```
 
-Expect **56 passed** (the original 50 + 6 replacing the retired
-`TestFSISACConnector` class with `TestOTXConnector`, matching the file's
-existing per-connector test style — offline fallback, `is_synthetic`
-flag, source label, limit handling, live/offline mode detection, IoC
-shape parity with the other connectors, and graceful degradation when a
-configured key can't reach the network).
+Expect **100 passed** (56 as of the OTX migration + 17 covering the Wazuh
+SIEM connector/MISP-export integration + 16 covering STIX 2.1/ATT&CK
+Navigator export + 11 covering cross-source correlation — see
+`CHANGELOG_SIEM_AND_CTI_STANDARDS.md` for the full breakdown of what each
+new test class checks).
 
 ---
 

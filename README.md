@@ -1,5 +1,7 @@
 # ThreatIQ v4.0 — Production CTI Platform
 
+> **New here?** Start with [`GETTING_STARTED.md`](./GETTING_STARTED.md) for the fastest path to a running, verified deployment — including the v4.1 SIEM integration and open-standards export features. This file is the deep architecture/API reference; `GETTING_STARTED.md` is the practical how-to-run-this guide.
+
 Closes all 4 research gaps identified in v3.0: real-world CTI validation, trained GAT,
 production architecture, and OpenCTI/MISP enrichment integration.
 
@@ -59,7 +61,7 @@ was found, fixed, and covered by an automated test in `tests/test_all.py`.
 ## Test Results
 
 ```
-50 passed in 8.51s
+100 passed in ~20s
 ```
 
 Covers: password hashing, JWT lifecycle, TLP access control, rate limiting,
@@ -79,6 +81,7 @@ RL agent math, OpenCTI STIX bundle structure, and a full end-to-end mini-pipelin
 
 ```
 threatiq_v4/
+├── GETTING_STARTED.md          Single entry point: deploy + run this whole project
 ├── app/
 │   ├── main.py                 FastAPI app, security middleware, static UI serving
 │   ├── core/
@@ -86,19 +89,87 @@ threatiq_v4/
 │   │   ├── security.py         JWT, RBAC, rate limiting, sanitisation, TLP control
 │   │   └── synthetic_data.py   Explicit is_synthetic=True generator
 │   ├── api/v1/                 auth, iocs, pipeline, graph, feedback, connectors, evaluation
-│   ├── connectors/              misp_connector, circl_connector, otx_connector, opencti_connector
+│   ├── connectors/              misp_connector, circl_connector, otx_connector, opencti_connector,
+│   │                            wazuh_connector (pull SIEM alerts), misp_export (push to MISP)
+│   ├── services/
+│   │   ├── stix_export.py       STIX 2.1 bundle export (OASIS standard, MISP/OpenCTI-agnostic)
+│   │   ├── attck_navigator.py   MITRE ATT&CK Navigator layer export from GAT predictions
+│   │   └── correlation.py       Cross-source IoC correlation / confidence boosting
 │   ├── ml/gat.py                NumpyGAT + GATTrainer (Bellman-trained, MITRE ground truth)
 │   ├── models/models.py         12-table SQLAlchemy schema (multi-tenant, audit, ground truth)
 │   ├── db/session.py            Async SQLAlchemy engine
-│   ├── workers/                 Celery app + scheduled tasks (hourly/6h/daily/weekly)
+│   ├── workers/                 Celery app + scheduled tasks (15min/hourly/6h/daily/weekly)
 │   └── static/index.html        Full-stack SPA (JWT auth, RBAC-aware UI, live polling)
-├── tests/test_all.py            50 tests
+├── tests/test_all.py            100 tests
 ├── docker-compose.yml           postgres + redis + api + worker + beat
+├── docker-compose.wazuh.yml     optional Wazuh SIEM overlay (manager + indexer + dashboard)
 ├── docker/Dockerfile.api
+├── docs/                        Research paper (.tex/.pdf), presentation deck, demo script
 ├── requirements.txt
 ├── .env.template
 └── scripts/setup.py             Downloads MITRE data, trains initial GAT
 ```
+
+## SIEM Integration
+
+ThreatIQ closes the loop with a SIEM rather than treating it as just
+another passive data source:
+
+```
+CTI sources ──▶ ThreatIQ ──▶ MISP export ──▶ Wazuh SIEM ──▶ live detections
+(OTX/MISP/CIRCL)  (classify,      (POST            (auto-generates      │
+                   GAT predict)   /connectors/       rules from            │
+                                  misp/export)        published IoCs)      │
+     ▲                                                                     │
+     └──────────────── WazuhConnector pulls alerts back in ◀──────────────┘
+```
+
+- **Pull**: `WazuhConnector` (`app/connectors/wazuh_connector.py`) treats
+  Wazuh alerts as another CTI source, querying the Wazuh indexer's
+  OpenSearch-compatible API — same `fetch_recent(limit)` interface as
+  every other connector, same offline-fallback contract.
+- **Push**: `MISPExporter` (`app/connectors/misp_export.py`) publishes
+  ThreatIQ's own high-confidence classified IoCs to MISP as an Event.
+  Wazuh's own MISP integration module (configured on the Wazuh side)
+  polls that event and auto-generates detection rules.
+- Bring up the SIEM stack: `docker compose -f docker-compose.yml -f
+  docker-compose.wazuh.yml up -d` (see the header comment in
+  `docker-compose.wazuh.yml` for the one-time cert-generation step Wazuh
+  requires before its first boot).
+
+## Open CTI Standards Interoperability
+
+Beyond MISP/OpenCTI/OTX/CIRCL as *inputs*, ThreatIQ exports its own
+output in the two formats the wider CTI field has actually converged on,
+so its results are useful outside ThreatIQ itself:
+
+- **STIX 2.1** (`GET /api/v1/iocs/export/stix`) — a standards-compliant
+  Bundle any STIX/TAXII-consuming tool can ingest directly, not just
+  MISP. Deterministic (UUIDv5) indicator IDs for idempotent
+  republication; CVEs exported as proper `vulnerability` SDOs; IoC types
+  with no dedicated STIX Cyber Observable type are annotated via `Note`
+  rather than forced into a fabricated observable.
+- **MITRE ATT&CK Navigator layer** (`GET /api/v1/graph/navigator-layer`)
+  — turns GAT's `(actor, technique, score)` predictions into a layer file
+  you can open directly at
+  [mitre-attack.github.io/attack-navigator](https://mitre-attack.github.io/attack-navigator/)
+  and see as a heatmap over the real ATT&CK matrix, no code required.
+
+## Cross-Source Correlation
+
+`POST /api/v1/connectors/correlate` fetches a fresh batch from every
+configured connector and merges observables independently confirmed by
+more than one source into a single record with a boosted confidence
+score — the same underlying principle as the reliability/credibility
+distinction in the Admiralty (NATO) intelligence-grading system: a fact
+confirmed by two unrelated sources is stronger evidence than the same
+fact repeated once. Confidence boost is multiplicative against the
+remaining headroom to 1.0 (`app/services/correlation.py`), so it rewards
+genuine independent corroboration without letting enough low-quality
+sources artificially reach 100%. Exposed as a standalone endpoint (and a
+"Correlate Sources" button on the Connectors page) rather than folded
+into the default pipeline, so `POST /pipeline/run`'s classifier/GAT
+metrics — the ones cited in the accompanying paper — stay unaffected.
 
 ## API Reference (selected)
 
@@ -106,13 +177,17 @@ threatiq_v4/
 |---|---|---|---|
 | `/api/v1/auth/login` | POST | none | Returns JWT |
 | `/api/v1/iocs` | GET | any role | TLP-filtered, paginated, searchable |
-| `/api/v1/pipeline/run` | POST | admin/analyst | 4-stage pipeline incl. live CTI feeds |
+| `/api/v1/iocs/export/stix` | GET | any role | Export IoCs as a STIX 2.1 bundle |
+| `/api/v1/pipeline/run` | POST | admin/analyst | 4-stage pipeline incl. live CTI feeds + Wazuh |
 | `/api/v1/graph` | GET | any role | Graph stats + GAT predictions |
 | `/api/v1/graph/train` | POST | **admin only** | Retrain GAT on MITRE ATT&CK |
+| `/api/v1/graph/navigator-layer` | GET | any role | Export GAT predictions as an ATT&CK Navigator layer |
 | `/api/v1/feedback` | POST | admin/analyst | Submit RL correction |
-| `/api/v1/connectors/{name}/fetch` | POST | **admin only** | Manual feed pull |
+| `/api/v1/connectors/{name}/fetch` | POST | **admin only** | Manual feed pull (incl. `WAZUH`) |
+| `/api/v1/connectors/correlate` | POST | admin/analyst | Fetch all sources + boost confidence on cross-source matches |
+| `/api/v1/connectors/misp/export` | POST | **admin only** | Push high-confidence IoCs to MISP |
 | `/api/v1/connectors/opencti/enrich` | POST | **admin only** | Test OpenCTI enrichment |
-| `/api/v1/evaluation/run` | POST | admin/analyst | Evaluate on synthetic or real data |
+| `/api/v1/evaluation/run` | POST | admin/analyst | Evaluate on synthetic or real data (incl. `real_wazuh`) |
 | `/api/v1/evaluation/gat` | GET | any role | GAT accuracy vs MITRE ground truth |
 
 ## Known Remaining Limitations

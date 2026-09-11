@@ -322,13 +322,14 @@ code{font-family:'Cascadia Code','Courier New',monospace}
           <div class="page-actions">
             <button class="btn btn-outline btn-sm" onclick="exportCSV()">&#11015; CSV</button>
             <button class="btn btn-outline btn-sm" onclick="exportJSON()">&#11015; JSON</button>
+            <button class="btn btn-outline btn-sm" onclick="exportSTIX()" title="Export as a STIX 2.1 Bundle -- OASIS standard, ingestible by MISP, OpenCTI, or any STIX/TAXII tool">&#11015; STIX 2.1</button>
           </div>
         </div>
         <div class="filter-bar">
           <input type="text" id="ioc-q" placeholder="Search IoCs..." oninput="debounceLoadIocs()" style="flex:1;min-width:180px"/>
           <select id="ioc-label" onchange="loadIocs()"><option value="">All Classes</option><option>Malware</option><option>Phishing</option><option>Ransomware</option><option>DDoS</option><option>APT</option><option>SQL Injection</option><option>Zero-Day</option><option>Credential Stuffing</option><option>Insider Threat</option></select>
           <select id="ioc-sev" onchange="loadIocs()"><option value="">All Severity</option><option value="5">Critical</option><option value="4">High</option><option value="3">Medium</option><option value="2">Low</option><option value="1">Info</option></select>
-          <select id="ioc-src" onchange="loadIocs()"><option value="">All Sources</option><option>MISP</option><option>CIRCL</option><option>OTX AlienVault</option><option>Internal SIEM</option><option>VirusTotal</option></select>
+          <select id="ioc-src" onchange="loadIocs()"><option value="">All Sources</option><option>MISP</option><option>CIRCL</option><option>OTX AlienVault</option><option>Wazuh SIEM</option><option>Internal SIEM</option><option>VirusTotal</option></select>
           <select id="ioc-tlp" onchange="loadIocs()"><option value="">All TLP</option><option>TLP:WHITE</option><option>TLP:GREEN</option><option>TLP:AMBER</option><option>TLP:RED</option></select>
           <select id="ioc-synth" onchange="loadIocs()"><option value="">Real + Synthetic</option><option value="false">Real only</option><option value="true">Synthetic only</option></select>
           <label style="font-size:12.5px;color:var(--lgray);display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="ioc-anom" onchange="loadIocs()"> Anomalous</label>
@@ -374,6 +375,7 @@ code{font-family:'Cascadia Code','Courier New',monospace}
           <div><div class="page-title">Attack Knowledge Graph</div><div class="page-sub" id="graph-sub">Trained GAT — MITRE ATT&amp;CK aligned</div></div>
           <div class="page-actions">
             <button class="btn btn-outline btn-sm" onclick="loadGraph()">&#8635; Refresh</button>
+            <button class="btn btn-outline btn-sm" onclick="exportNavigatorLayer()" title="Export GAT predictions as a MITRE ATT&CK Navigator layer -- open at mitre-attack.github.io/attack-navigator">&#11015; Navigator Layer</button>
             <button class="btn btn-primary btn-sm" onclick="retrainGAT()">&#9881; Retrain GAT</button>
           </div>
         </div>
@@ -461,18 +463,27 @@ code{font-family:'Cascadia Code','Courier New',monospace}
       <!-- CONNECTORS -->
       <div id="page-connectors" class="page">
         <div class="page-header">
-          <div><div class="page-title">CTI Feed Connectors</div><div class="page-sub">MISP / CIRCL / OTX / OpenCTI enrichment connector</div></div>
-          <div class="page-actions"><button class="btn btn-teal btn-sm" onclick="loadConnectors()">&#8635; Status</button></div>
+          <div><div class="page-title">CTI Feed Connectors</div><div class="page-sub">MISP / CIRCL / OTX / Wazuh SIEM / OpenCTI enrichment connector</div></div>
+          <div class="page-actions">
+            <button class="btn btn-outline btn-sm" onclick="runCorrelation()">&#128269; Correlate Sources</button>
+            <button class="btn btn-teal btn-sm" onclick="loadConnectors()">&#8635; Status</button>
+          </div>
         </div>
         <div class="feed-grid" id="connectors-grid"></div>
+        <div class="card" id="correlation-card" style="margin-top:13px;display:none">
+          <div class="card-title"><span>&#128269;</span>Cross-Source Correlation</div>
+          <div id="correlation-summary" style="font-size:13px;color:var(--text2);margin-bottom:10px"></div>
+          <div class="table-wrap"><table><thead><tr><th>IoC Value</th><th>Type</th><th>Sources</th><th>Confidence</th><th>Boost</th></tr></thead><tbody id="correlation-tbody"></tbody></table></div>
+        </div>
         <div class="card" style="margin-top:13px">
           <div class="card-title"><span>&#128268;</span>Setup Guide</div>
           <div style="font-size:13px;color:var(--text2);line-height:2.2">
             <strong>MISP:</strong> Set <code>MISP_URL</code> and <code>MISP_API_KEY</code> in <code>.env</code><br>
             <strong>CIRCL:</strong> Public endpoints work without auth. Credentials optional for private feeds.<br>
             <strong>OTX:</strong> Free, no membership gate. Set <code>OTX_API_KEY</code> (get one at otx.alienvault.com)<br>
+            <strong>Wazuh:</strong> Set <code>WAZUH_INDEXER_URL</code>, <code>WAZUH_API_USERNAME</code>, <code>WAZUH_API_PASSWORD</code> to pull live SIEM alerts<br>
             <strong>OpenCTI:</strong> Set <code>OPENCTI_URL</code> and <code>OPENCTI_TOKEN</code> to activate enrichment connector<br>
-            After setting credentials, restart the server and re-run the pipeline.
+            After setting credentials, restart the server and re-run the pipeline. "Correlate Sources" above works in offline mode too, but with each connector's independently-written sample data, don't expect real overlaps until at least two sources are live against the same real-world infrastructure.
           </div>
         </div>
       </div>
@@ -759,7 +770,7 @@ async function evalGAT(){
 async function loadConnectors(){
   try{
     const c=await api('/connectors');if(!c)return;
-    const icons={MISP:'&#128308;',CIRCL:'&#128994;',OTX:'&#128309;',OpenCTI:'&#9899;'};
+    const icons={MISP:'&#128308;',CIRCL:'&#128994;',OTX:'&#128309;',WAZUH:'&#128737;',OpenCTI:'&#9899;'};
     document.getElementById('connectors-grid').innerHTML=c.map(conn=>`<div class="feed-card"><div style="display:flex;align-items:center;gap:9px;margin-bottom:7px"><span style="font-size:22px">${icons[conn.name]||'&#9898;'}</span><div style="font-size:14px;font-weight:600;color:var(--navy)">${conn.name}</div></div><div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;${conn.status==='live'?'color:var(--green)':'color:var(--lgray)'}"><span class="conn-dot ${conn.status==='live'?'conn-live':'conn-off'}"></span>${conn.status==='live'?'Live — connected':'Offline — set credentials'}</div>${conn.status==='live'?`<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%;justify-content:center" onclick="fetchConn('${conn.name}')">Fetch now</button>`:''}</div>`).join('');
     const dm={MISP:'dot-misp',OTX:'dot-otx',OpenCTI:'dot-opencti'};
     c.forEach(conn=>{const d=dm[conn.name];if(d){const el=document.getElementById(d);if(el)el.className='conn-dot '+(conn.status==='live'?'conn-live':'conn-off');}});
@@ -782,6 +793,29 @@ async function exportCSV(){
 async function exportJSON(){
   try{const r=await api('/iocs?per_page=500');if(!r)return;const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(r,null,2));a.download='threatiq_export.json';a.click();toast('JSON exported','success');}
   catch(e){toast('Export error','error');}
+}
+
+async function runCorrelation(){
+  toast('Fetching from all connectors and correlating...');loading(true);
+  try{
+    const r=await api('/connectors/correlate?limit_per_source=50','POST');
+    if(!r){loading(false);return;}
+    document.getElementById('correlation-card').style.display='block';
+    document.getElementById('correlation-summary').innerHTML=`Fetched <b>${r.fetched_total}</b> records (${Object.entries(r.per_source_counts).map(([k,v])=>`${k}: ${v}`).join(', ')}) &rarr; <b>${r.unique_observables}</b> unique observables, <b>${r.corroborated_observables}</b> confirmed by 2+ independent sources.`;
+    document.getElementById('correlation-tbody').innerHTML=r.correlated.slice(0,25).map(c=>`<tr><td style="font-family:monospace;font-size:12px">${c.ioc_value}</td><td>${c.ioc_type}</td><td>${c.corroborating_sources.join(', ')}${c.source_count>1?' <span class="badge" style="background:var(--teal);color:#fff">x'+c.source_count+'</span>':''}</td><td>${(c.confidence*100).toFixed(0)}%</td><td>${c.correlation_boost>0?'+'+(c.correlation_boost*100).toFixed(1)+'%':'—'}</td></tr>`).join('');
+    toast(`${r.corroborated_observables} observable(s) confirmed across multiple sources`,'success');
+  }catch(e){toast('Correlation error: '+e.message,'error');}
+  loading(false);
+}
+
+async function exportSTIX(){
+  try{const r=await api('/iocs/export/stix');if(!r)return;const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(r,null,2));a.download='threatiq_stix_bundle.json';a.click();toast(`STIX 2.1 bundle exported (${r.objects.length} objects)`,'success');}
+  catch(e){toast('STIX export error: '+e.message,'error');}
+}
+
+async function exportNavigatorLayer(){
+  try{const r=await api('/graph/navigator-layer');if(!r)return;const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(r,null,2));a.download='threatiq_navigator_layer.json';a.click();toast(`ATT&CK Navigator layer exported (${r.techniques.length} techniques)`,'success');}
+  catch(e){toast('Navigator export error: '+e.message,'error');}
 }
 
 function globalSearch(q){if(S.page!=='iocs')nav('iocs');document.getElementById('ioc-q').value=q;debounceLoadIocs();}

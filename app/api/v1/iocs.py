@@ -119,6 +119,35 @@ async def list_iocs(
     )
 
 
+@router.get("/export/stix", summary="Export IoCs as a STIX 2.1 bundle")
+async def export_stix(
+    request: Request,
+    min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+    min_severity: int = Query(1, ge=1, le=5),
+    user: CurrentUser = Depends(get_current_user),
+    _rl=Depends(rate_limit(default_limiter)),
+):
+    """
+    Exports the current IoC store as a single STIX 2.1 Bundle -- the
+    OASIS-standard interchange format any STIX/TAXII-aware tool (not just
+    MISP) can consume directly. Respects the caller's TLP clearance the
+    same way GET /iocs does, and always excludes synthetic training
+    records (STIX bundles are meant to represent real intelligence).
+    """
+    from app.services.stix_export import build_ioc_bundle
+
+    records = _MOCK_IOCS
+    records = [r for r in records
+               if {"TLP:WHITE":0,"TLP:GREEN":1,"TLP:AMBER":2,"TLP:RED":3}.get(r.tlp,0)
+               <= {"TLP:WHITE":0,"TLP:GREEN":1,"TLP:AMBER":2,"TLP:RED":3}.get(user.max_tlp,0)]
+    records = [r for r in records if r.label_confidence >= min_confidence and r.severity >= min_severity]
+
+    bundle = build_ioc_bundle(records, exclude_synthetic=True)
+    audit_log.log(user.user_id, user.tenant_id, "export_stix", "iocs",
+                  details={"objects": len(bundle["objects"]), "min_confidence": min_confidence, "min_severity": min_severity})
+    return bundle
+
+
 @router.get("/{ioc_id}", response_model=IoCResponse, summary="Get single IoC")
 async def get_ioc(
     request: Request,

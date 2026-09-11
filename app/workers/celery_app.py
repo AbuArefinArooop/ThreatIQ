@@ -4,6 +4,7 @@ Tasks:
   - ingest_from_misp:   scheduled hourly
   - ingest_from_circl:  scheduled every 6 hours
   - ingest_from_otx:    scheduled daily
+  - ingest_wazuh:       scheduled every 15 minutes (SIEM alerts, higher frequency)
   - retrain_gat:        scheduled weekly
   - run_anomaly_scan:   scheduled every 30 minutes
 """
@@ -41,6 +42,10 @@ celery_app.conf.beat_schedule = {
     "ingest-otx-daily": {
         "task": "app.workers.tasks.ingest_otx",
         "schedule": crontab(minute=0, hour=2),  # 2 AM UTC
+    },
+    "ingest-wazuh-15min": {
+        "task": "app.workers.tasks.ingest_wazuh",
+        "schedule": crontab(minute="*/15"),  # SIEM alerts are far higher-frequency than feed pulls
     },
     "retrain-gat-weekly": {
         "task": "app.workers.tasks.retrain_gat",
